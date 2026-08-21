@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classroom Library</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">📚</span>
+    <span id="brand-name">Classroom Library</span>
+  </div>
+  <nav class="tabs" id="tabs" role="tablist">
+    <button class="tab" data-route="circulation" role="tab">Circulation</button>
+    <button class="tab" data-route="catalog"     role="tab">Catalog</button>
+    <button class="tab" data-route="patrons"     role="tab">Students</button>
+    <button class="tab" data-route="holds"       role="tab">Holds <span class="pill" id="holds-pill" hidden>0</span></button>
+    <button class="tab" data-route="reports"     role="tab">Reports</button>
+    <button class="tab" data-route="settings"    role="tab">Settings</button>
+  </nav>
+</header>
+
+<main id="view" class="view" tabindex="-1"></main>
+
+<dialog id="modal">
+  <div class="modal-shell">
+    <div class="modal-head">
+      <h2 id="modal-title">Dialog</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</dialog>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<div id="print-area" class="print-area"></div>
+
+<script src="js/util.js"></script>
+<script src="js/store.js"></script>
+<script src="js/lookup.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
