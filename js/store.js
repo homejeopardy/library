@@ -14,7 +14,13 @@ const DEFAULT_SETTINGS = {
   graceDays: 0,
   autoCreatePatrons: true,
   barcodePrefix: 'CL',
-  nextBarcode: 1
+  nextBarcode: 1,
+  // A starting point for a classroom collection — rename, add or delete in Settings.
+  genres: [
+    'Adventure', 'Biography & Memoir', 'Fantasy', 'Graphic Novels', 'Historical Fiction',
+    'Humor', 'Mystery', 'Mythology & Folktales', 'Nonfiction', 'Picture Books',
+    'Poetry & Novels in Verse', 'Realistic Fiction', 'Science Fiction', 'Scary Stories', 'Sports'
+  ]
 };
 
 function blankDB() {
@@ -29,14 +35,31 @@ function loadDB() {
   if (!raw) return blankDB();
   try {
     const parsed = JSON.parse(raw);
-    const db = Object.assign(blankDB(), parsed);
-    db.settings = Object.assign({}, DEFAULT_SETTINGS, parsed.settings || {});
-    ['items', 'patrons', 'loans', 'holds', 'activity'].forEach(k => { if (!Array.isArray(db[k])) db[k] = []; });
-    return db;
+    return migrate(parsed);
   } catch (e) {
     console.error('Could not read saved library; starting empty.', e);
     return blankDB();
   }
+}
+
+/* Fill gaps in older saves or backups so the rest of the app can assume the current shape. */
+function migrate(parsed) {
+  const db = Object.assign(blankDB(), parsed);
+  db.settings = Object.assign({}, DEFAULT_SETTINGS, parsed.settings || {});
+  if (!Array.isArray(db.settings.genres)) db.settings.genres = DEFAULT_SETTINGS.genres.slice();
+  ['items', 'patrons', 'loans', 'holds', 'activity'].forEach(k => { if (!Array.isArray(db[k])) db[k] = []; });
+
+  // The free-text "shelf / location" field became a genre. A location that names a genre
+  // becomes that genre; anything else is kept in the book's notes rather than lost.
+  db.items.forEach(item => {
+    if (!('location' in item)) { if (item.genre == null) item.genre = ''; return; }
+    const loc = String(item.location || '').trim();
+    const match = db.settings.genres.find(g => normName(g) === normName(loc));
+    if (item.genre == null) item.genre = match || '';
+    if (loc && !match) item.notes = (item.notes ? item.notes + '\n' : '') + 'Shelf: ' + loc;
+    delete item.location;
+  });
+  return db;
 }
 
 function saveDB() {
@@ -97,6 +120,7 @@ function searchItems(q) {
     normName(i.title).includes(n) ||
     normName(i.author).includes(n) ||
     normName(i.tags ? i.tags.join(' ') : '').includes(n) ||
+    normName(i.genre).includes(n) ||
     (c && normCode(i.barcode).includes(c)) ||
     (c && normCode(i.isbn).includes(c))
   ).sort(byTitle);
@@ -232,7 +256,7 @@ function addItem(fields) {
     publisher: String(fields.publisher || '').trim(),
     year: String(fields.year || '').trim(),
     cover: String(fields.cover || '').trim(),
-    location: String(fields.location || '').trim(),
+    genre: String(fields.genre || '').trim(),
     tags: (fields.tags || []).filter(Boolean),
     notes: String(fields.notes || '').trim(),
     addedAt: nowISO()
@@ -394,6 +418,39 @@ function readyHolds() {
     });
 }
 
+/* --- genres --- */
+const genreList = () => S().genres.slice().sort((a, b) => a.localeCompare(b));
+const booksInGenre = name => DB.items.filter(i => normName(i.genre) === normName(name));
+
+function addGenre(name, quiet) {
+  const clean = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!clean) return { ok: false, error: 'Enter a genre name.' };
+  const existing = S().genres.find(g => normName(g) === normName(clean));
+  if (existing) return { ok: true, genre: existing, existed: true };
+  S().genres.push(clean);
+  if (!quiet) saveDB();
+  return { ok: true, genre: clean, existed: false };
+}
+
+/* Renaming onto an existing genre merges the two. Every book follows the rename. */
+function renameGenre(from, to) {
+  const clean = String(to || '').trim().replace(/\s+/g, ' ');
+  if (!clean) return { ok: false, error: 'Genre name cannot be blank.' };
+  const target = S().genres.find(g => normName(g) === normName(clean) && normName(g) !== normName(from)) || clean;
+  booksInGenre(from).forEach(i => { i.genre = target; });
+  S().genres = S().genres.filter(g => normName(g) !== normName(from));
+  if (!S().genres.some(g => normName(g) === normName(target))) S().genres.push(target);
+  saveDB();
+  return { ok: true, genre: target, merged: target !== clean };
+}
+
+function deleteGenre(name) {
+  booksInGenre(name).forEach(i => { i.genre = ''; });
+  S().genres = S().genres.filter(g => normName(g) !== normName(name));
+  saveDB();
+  return { ok: true };
+}
+
 /* --- backup --- */
 function exportJSON() {
   return JSON.stringify(Object.assign({}, DB, { exportedAt: nowISO() }), null, 2);
@@ -406,8 +463,7 @@ function importJSON(text, mode) {
     return { ok: false, error: 'That does not look like a Classroom Library backup.' };
   }
   if (mode === 'replace') {
-    DB = Object.assign(blankDB(), incoming);
-    DB.settings = Object.assign({}, DEFAULT_SETTINGS, incoming.settings || {});
+    DB = migrate(incoming);
     saveDB();
     return { ok: true, added: { items: DB.items.length, patrons: DB.patrons.length } };
   }
@@ -415,7 +471,9 @@ function importJSON(text, mode) {
   const has = (arr, id) => arr.some(x => x.id === id);
   let added = { items: 0, patrons: 0, loans: 0, holds: 0 };
   (incoming.patrons || []).forEach(p => { if (!has(DB.patrons, p.id) && !findPatronByName(p.name)) { DB.patrons.push(p); added.patrons++; } });
-  (incoming.items || []).forEach(i => { if (!has(DB.items, i.id) && !findItemByCode(i.barcode)) { DB.items.push(i); added.items++; } });
+  migrate({ items: incoming.items || [], settings: { genres: S().genres } }).items
+    .forEach(i => { if (!has(DB.items, i.id) && !findItemByCode(i.barcode)) { DB.items.push(i); added.items++; } });
+  (incoming.items || []).forEach(i => { if (i.genre) addGenre(i.genre, true); });
   (incoming.loans || []).forEach(l => { if (!has(DB.loans, l.id) && itemById(l.itemId) && patronById(l.patronId)) { DB.loans.push(l); added.loans++; } });
   (incoming.holds || []).forEach(h => { if (!has(DB.holds, h.id) && itemById(h.itemId) && patronById(h.patronId)) { DB.holds.push(h); added.holds++; } });
   saveDB();

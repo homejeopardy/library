@@ -197,6 +197,7 @@ h1, h2, h3 { line-height: 1.25; }
   border-radius: 999px;
   font-size: 12px;
   font-weight: 650;
+  white-space: nowrap;
 }
 .badge-ok { background: var(--ok-soft); color: var(--ok); }
 .badge-warn { background: var(--warn-soft); color: var(--warn); }
@@ -391,6 +392,49 @@ td.row-actions .link + .link { margin-left: 12px; }
 .pick:hover { background: var(--surface-2); }
 .pick-text { display: flex; flex-direction: column; flex: 1; }
 
+/* ---------------- genres ---------------- */
+
+.genre-tag {
+  display: inline-block;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+button.genre-tag { cursor: pointer; }
+td .genre-tag { white-space: normal; text-align: left; }
+button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
+.item-genre { margin: 8px 0 0; }
+.field .field-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+.genre-hints { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+.select {
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  max-width: 220px;
+}
+.select:focus { outline: none; border-color: var(--accent); }
+
+.genre-admin { list-style: none; margin: 0 0 14px; padding: 0; }
+.genre-admin li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.genre-admin .row-actions { margin-left: auto; }
+
 /* ---------------- reports ---------------- */
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
@@ -517,6 +561,8 @@ td.row-actions .link + .link { margin-left: 12px; }
   .notice table { width: 100%; border-collapse: collapse; margin: 12px 0; }
   .notice th, .notice td { border-bottom: 1px solid #999; padding: 6px 4px; text-align: left; }
   .notice-foot { margin-top: 24px; font-size: 9pt; color: #555; }
+  .notice h3 { font-size: 12pt; margin: 18px 0 0; page-break-after: avoid; }
+  .notice-count { font-weight: 400; color: #555; }
 }
 
 /* ---------------- small screens ---------------- */

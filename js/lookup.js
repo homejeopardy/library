@@ -59,6 +59,7 @@ async function lookupOpenLibrarySearch(isbn) {
     year: edYear || String(doc.first_publish_year || ''),
     cover: doc.cover_i ? 'https://covers.openlibrary.org/b/id/' + doc.cover_i + '-M.jpg' : '',
     tags: uniq(doc.subject || []).slice(0, 4),
+    subjects: doc.subject || [],
     source: 'Open Library'
   };
 }
@@ -89,7 +90,8 @@ async function lookupOpenLibraryEdition(isbn) {
     publisher: uniq(ed.publishers || []).slice(0, 1).join(''),
     year: (String(ed.publish_date || '').match(/\d{4}/) || [''])[0],
     cover: ed.covers && ed.covers[0] > 0 ? 'https://covers.openlibrary.org/b/id/' + ed.covers[0] + '-M.jpg' : '',
-    tags: [],
+    tags: (ed.subjects || []).slice(0, 4),
+    subjects: ed.subjects || [],
     source: 'Open Library'
   };
 }
@@ -107,6 +109,7 @@ async function lookupGoogleBooks(isbn) {
     year: (String(v.publishedDate || '').match(/\d{4}/) || [''])[0],
     cover: (v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail) || '').replace(/^http:/, 'https:'),
     tags: (v.categories || []).slice(0, 4),
+    subjects: v.categories || [],
     source: 'Google Books'
   };
 }
@@ -131,4 +134,41 @@ async function lookupISBN(raw) {
   }
   if (healthy) return null;
   throw new Error(answered ? 'unavailable' : 'offline');
+}
+
+/* ---------------------------------------------------------------
+   Genre hints. Open Library merges subject headings across every
+   edition of a book, adaptations included (The Giver has graphic-novel
+   editions, so it carries "Graphic novels" headings too). That makes a
+   single confident answer unreliable, so this ranks genres by how many
+   headings support them and offers the top two for the teacher to pick.
+   It never chooses on its own.
+   --------------------------------------------------------------- */
+const GENRE_HINTS = [
+  ['Graphic Novels', /graphic novel|comic books?, strips|\bcomics\b|\bmanga\b/],
+  ['Picture Books', /picture books/],
+  ['Poetry & Novels in Verse', /novels in verse|\bpoetry\b|\bpoems\b|stories in rhyme/],
+  ['Biography & Memoir', /biograph|memoir|autobiograph/],
+  ['Science Fiction', /science fiction|dystopia/],
+  ['Fantasy', /\bfantasy\b|\bmagic\b|dragons|wizards/],
+  ['Mystery', /mystery|mysteries|detective/],
+  ['Scary Stories', /horror|ghost stories|\bghosts\b|supernatural/],
+  ['Mythology & Folktales', /mytholog|folklore|fairy tales|folk tales|legends/],
+  ['Historical Fiction', /historical fiction|history[^|]*fiction/],
+  ['Sports', /\bsports\b|baseball|basketball|soccer|football/],
+  ['Humor', /humorous|\bhumor\b/],
+  ['Adventure', /adventure|survival/]
+];
+
+function suggestGenres(subjects, genres, max) {
+  const score = {};
+  (subjects || []).forEach(sub => {
+    const t = String(sub).toLowerCase();
+    GENRE_HINTS.forEach(([g, re]) => { if (re.test(t)) score[g] = (score[g] || 0) + 1; });
+  });
+  return Object.keys(score)
+    .sort((a, b) => score[b] - score[a])
+    .map(g => (genres || []).find(x => normName(x) === normName(g)))
+    .filter(Boolean)
+    .slice(0, max || 2);
 }

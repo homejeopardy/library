@@ -16,7 +16,7 @@ if (!ROUTES.includes(route)) route = 'circulation';
 
 /* Transient screen state (never persisted). */
 const circ = { item: null, patron: null, matches: null, busy: false };
-const ui = { catalogQuery: '', catalogFilter: 'all', patronQuery: '' };
+const ui = { catalogQuery: '', catalogFilter: 'all', catalogGenre: '', patronQuery: '' };
 
 const view = document.getElementById('view');
 const modal = document.getElementById('modal');
@@ -166,7 +166,8 @@ function itemHeadHTML(item) {
     <div>
       <h2 class="item-title">${esc(item.title)}</h2>
       <p class="item-sub">${esc(item.author || 'Unknown author')}${item.year ? ' &middot; ' + esc(item.year) : ''}</p>
-      <p class="item-meta mono">${esc(item.barcode)}${item.isbn ? ' &middot; ISBN ' + esc(item.isbn) : ''}${item.location ? ' &middot; ' + esc(item.location) : ''}</p>
+      <p class="item-meta mono">${esc(item.barcode)}${item.isbn ? ' &middot; ISBN ' + esc(item.isbn) : ''}</p>
+      ${item.genre ? `<p class="item-genre"><span class="genre-tag">${esc(item.genre)}</span></p>` : ''}
     </div>
   </div>`;
 }
@@ -372,9 +373,19 @@ function field(label, name, value, opts) {
 }
 
 /* --- add / edit a book --- */
-function openItemModal(itemId, prefillISBN, prefillTitle) {
+function genreOptionsHTML(current) {
+  const list = genreList();
+  // A book can carry a genre that was later deleted from the list; still show it.
+  if (current && !list.some(g => normName(g) === normName(current))) list.push(current);
+  return `<option value="">— No genre —</option>` +
+    list.map(g => `<option value="${esc(g)}" ${normName(g) === normName(current) ? 'selected' : ''}>${esc(g)}</option>`).join('') +
+    `<option value="__new__">＋ New genre…</option>`;
+}
+
+/* stickyGenre: "Add & add another" keeps the genre, since books usually arrive in stacks of one kind. */
+function openItemModal(itemId, prefillISBN, prefillTitle, stickyGenre) {
   const item = itemId ? itemById(itemId) : null;
-  const d = item || { barcode: '', isbn: prefillISBN || '', title: prefillTitle || '', author: '', publisher: '', year: '', cover: '', location: '', tags: [], notes: '' };
+  const d = item || { barcode: '', isbn: prefillISBN || '', title: prefillTitle || '', author: '', publisher: '', year: '', cover: '', genre: stickyGenre || '', tags: [], notes: '' };
 
   openModal(item ? 'Edit book' : 'Add a book', `
     <div class="lookup-row">
@@ -388,7 +399,10 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
       ${field('Publisher', 'publisher', d.publisher)}
       ${field('Year', 'year', d.year)}
       ${field('Barcode', 'barcode', d.barcode, { placeholder: 'Blank = generate ' + (S().barcodePrefix || 'CL') + '-0000' })}
-      ${field('Shelf / location', 'location', d.location, { placeholder: 'e.g. Bin 3' })}
+      <div class="field">
+        <label><span class="field-label">Genre</span><select name="genre">${genreOptionsHTML(d.genre)}</select></label>
+        <p class="genre-hints" id="genre-hints" hidden></p>
+      </div>
       ${field('Tags', 'tags', (d.tags || []).join(', '), { placeholder: 'comma separated' })}
       ${field('Cover image URL', 'cover', d.cover)}
     </div>
@@ -401,6 +415,33 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
   `, body => {
     const get = n => body.querySelector('[name="' + n + '"]');
     const status = body.querySelector('#lookup-status');
+    const genreSel = get('genre');
+    let prevGenre = genreSel.value;
+
+    genreSel.addEventListener('change', () => {
+      if (genreSel.value !== '__new__') { prevGenre = genreSel.value; return; }
+      const name = prompt('New genre name');
+      const res = name ? addGenre(name) : null;
+      if (!res || !res.ok) { genreSel.value = prevGenre; if (res) toast(res.error, 'error'); return; }
+      genreSel.innerHTML = genreOptionsHTML(res.genre);
+      prevGenre = res.genre;
+      if (!res.existed) toast('Added the genre "' + res.genre + '".', 'ok');
+    });
+
+    const hintBox = body.querySelector('#genre-hints');
+    function showGenreHints(list) {
+      hintBox.hidden = !list.length;
+      hintBox.innerHTML = list.length ? 'Maybe: ' + list.map(g =>
+        `<button type="button" class="genre-tag" data-genre="${esc(g)}">${esc(g)}</button>`).join(' ') : '';
+    }
+    hintBox.addEventListener('click', e => {
+      const b = e.target.closest('[data-genre]');
+      if (!b) return;
+      genreSel.value = b.dataset.genre;
+      prevGenre = genreSel.value;
+      showGenreHints([]);
+    });
+    genreSel.addEventListener('change', () => { if (genreSel.value) showGenreHints([]); });
 
     async function runLookup() {
       const raw = get('isbn').value.trim();
@@ -412,6 +453,7 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
         ['title', 'author', 'publisher', 'year', 'cover'].forEach(k => { if (data[k] && !get(k).value.trim()) get(k).value = data[k]; });
         if (data.tags && data.tags.length && !get('tags').value.trim()) get('tags').value = data.tags.join(', ');
         status.textContent = 'Found in ' + data.source + '. Check it, then save.';
+        showGenreHints(genreSel.value ? [] : suggestGenres(data.subjects, S().genres));
         get('title').focus();
       } catch (e) {
         status.textContent = e.message === 'offline'
@@ -427,14 +469,14 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
       const fields = {
         isbn: get('isbn').value, title: get('title').value, author: get('author').value,
         publisher: get('publisher').value, year: get('year').value, barcode: get('barcode').value,
-        location: get('location').value, cover: get('cover').value, notes: get('notes').value,
+        genre: genreSel.value === '__new__' ? '' : genreSel.value, cover: get('cover').value, notes: get('notes').value,
         tags: get('tags').value.split(',').map(s => s.trim()).filter(Boolean)
       };
       const res = item ? updateItem(item.id, fields) : addItem(fields);
       if (!res.ok) { toast(res.error, 'error'); return; }
       toast(item ? 'Saved.' : 'Added "' + res.item.title + '" (' + res.item.barcode + ').', 'ok');
       if (again) {
-        openItemModal(null);
+        openItemModal(null, '', '', fields.genre);
         return;
       }
       closeModal();
@@ -594,11 +636,21 @@ VIEWS.catalog = function () {
   if (ui.catalogFilter === 'out') items = items.filter(i => activeLoanForItem(i.id));
   if (ui.catalogFilter === 'in') items = items.filter(i => !activeLoanForItem(i.id));
   if (ui.catalogFilter === 'overdue') items = items.filter(i => isOverdue(activeLoanForItem(i.id)));
+  if (ui.catalogGenre === '__none__') items = items.filter(i => !i.genre);
+  else if (ui.catalogGenre) items = items.filter(i => normName(i.genre) === normName(ui.catalogGenre));
+
+  const used = genreList().filter(g => booksInGenre(g).length);
+  const untagged = DB.items.filter(i => !i.genre).length;
 
   return `
   <section class="pane">
     <div class="toolbar">
-      <input id="catalog-q" class="search" placeholder="Search title, author, tag or barcode" value="${esc(ui.catalogQuery)}" autocomplete="off">
+      <input id="catalog-q" class="search" placeholder="Search title, author, genre, tag or barcode" value="${esc(ui.catalogQuery)}" autocomplete="off">
+      <select id="catalog-genre" class="select" aria-label="Genre">
+        <option value="">All genres</option>
+        ${used.map(g => `<option value="${esc(g)}" ${normName(g) === normName(ui.catalogGenre) ? 'selected' : ''}>${esc(g)} (${booksInGenre(g).length})</option>`).join('')}
+        ${untagged ? `<option value="__none__" ${ui.catalogGenre === '__none__' ? 'selected' : ''}>No genre yet (${untagged})</option>` : ''}
+      </select>
       <div class="chips" role="group" aria-label="Filter">
         ${[['all', 'All'], ['in', 'On the shelf'], ['out', 'Checked out'], ['overdue', 'Overdue']].map(([k, label]) =>
           `<button class="chip ${ui.catalogFilter === k ? 'active' : ''}" data-act="cat-filter" data-id="${k}">${label}</button>`).join('')}
@@ -609,7 +661,7 @@ VIEWS.catalog = function () {
     </div>
     ${items.length ? `
     <table class="table">
-      <thead><tr><th></th><th>Title</th><th>Author</th><th>Barcode</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Title</th><th>Author</th><th>Genre</th><th>Status</th><th></th></tr></thead>
       <tbody>
         ${items.map(i => {
           const loan = activeLoanForItem(i.id);
@@ -620,9 +672,9 @@ VIEWS.catalog = function () {
             <td>${coverHTML(i, 'cover-xs')}</td>
             <td><button class="link strong" data-act="desk-item" data-id="${i.id}">${esc(i.title)}</button>
                 ${waiting ? `<span class="pill">${waiting} waiting</span>` : ''}
-                ${i.location ? `<div class="muted small">${esc(i.location)}</div>` : ''}</td>
+                <div class="mono small muted">${esc(i.barcode)}</div></td>
             <td>${esc(i.author || '—')}</td>
-            <td class="mono small">${esc(i.barcode)}</td>
+            <td>${i.genre ? `<button class="genre-tag" data-act="cat-genre" data-id="${esc(i.genre)}">${esc(i.genre)}</button>` : '<span class="muted">—</span>'}</td>
             <td>${loan
               ? `<span class="badge ${late ? 'badge-danger' : 'badge-warn'}">${late ? 'Overdue' : 'Out'}</span>
                  <span class="muted small">${esc(who ? who.name : '?')} &middot; ${esc(fmtDate(loan.dueAt))}</span>`
@@ -640,6 +692,7 @@ VIEWS.catalog = function () {
 };
 
 AFTER.catalog = function () {
+  document.getElementById('catalog-genre').addEventListener('change', e => { ui.catalogGenre = e.target.value; render(); });
   const q = document.getElementById('catalog-q');
   q.addEventListener('input', debounce(e => { ui.catalogQuery = e.target.value; render(); document.getElementById('catalog-q').focus(); }, 180));
   q.focus();
@@ -780,6 +833,9 @@ VIEWS.reports = function () {
       </div>
     </div>
 
+    <h2 class="section-title">By genre</h2>
+    ${genreReportHTML(counts)}
+
     <h2 class="section-title">Never borrowed <span class="muted">(${never.length})</span></h2>
     ${never.length ? `<ul class="tag-list">${never.slice(0, 40).map(i => `<li><button class="link" data-act="desk-item" data-id="${i.id}">${esc(i.title)}</button></li>`).join('')}</ul>` : '<p class="muted">Every book has circulated at least once.</p>'}
 
@@ -791,6 +847,33 @@ VIEWS.reports = function () {
     </div>
   </section>`;
 };
+
+/* Which kinds of books actually move — useful when deciding what to buy next. */
+function genreReportHTML(counts) {
+  if (!DB.items.length) return '<p class="muted">No books yet.</p>';
+  const rows = {};
+  DB.items.forEach(i => {
+    const g = i.genre || '';
+    const r = rows[g] = rows[g] || { books: 0, out: 0, loans: 0 };
+    r.books++;
+    if (activeLoanForItem(i.id)) r.out++;
+    r.loans += counts[i.id] || 0;
+  });
+  const names = Object.keys(rows).sort((a, b) => rows[b].loans - rows[a].loans || rows[b].books - rows[a].books);
+  return `<table class="table">
+    <thead><tr><th>Genre</th><th>Books</th><th>Out now</th><th>Times borrowed</th><th>Per book</th></tr></thead>
+    <tbody>${names.map(g => {
+      const r = rows[g];
+      return `<tr>
+        <td>${g ? `<button class="genre-tag" data-act="report-genre" data-id="${esc(g)}">${esc(g)}</button>` : '<span class="muted">No genre yet</span>'}</td>
+        <td>${r.books}</td>
+        <td class="muted">${r.out || '—'}</td>
+        <td>${r.loans}</td>
+        <td class="muted">${(r.loans / r.books).toFixed(1)}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
 
 function tile(n, label, cls) {
   return `<div class="tile ${cls || ''}"><strong>${n}</strong><span>${esc(label)}</span></div>`;
@@ -817,6 +900,27 @@ VIEWS.settings = function () {
     </label>
     <div class="actions"><button class="btn btn-primary" data-act="save-settings">Save settings</button></div>
 
+    <h2 class="section-title">Genres</h2>
+    <p class="hint">These are the choices in the Genre menu when you add a book. Renaming a genre updates every book in it; renaming one onto another merges them.</p>
+    <ul class="genre-admin">
+      ${genreList().map(g => {
+        const n = booksInGenre(g).length;
+        return `<li>
+          <span class="genre-tag">${esc(g)}</span>
+          <span class="muted small">${n ? plural(n, 'book') : 'unused'}</span>
+          <span class="row-actions">
+            <button class="link" data-act="genre-rename" data-id="${esc(g)}">Rename</button>
+            <button class="link danger" data-act="genre-delete" data-id="${esc(g)}">Delete</button>
+          </span>
+        </li>`;
+      }).join('') || '<li class="muted">No genres yet.</li>'}
+    </ul>
+    <div class="lookup-row">
+      <label class="field"><span>New genre</span><input id="new-genre" autocomplete="off" placeholder="e.g. Animal Stories"></label>
+      <button class="btn" data-act="genre-add">Add</button>
+    </div>
+    <div class="actions"><button class="btn btn-quiet" data-act="genre-defaults">Restore suggested genres</button></div>
+
     <h2 class="section-title">Backup</h2>
     <p class="hint">Everything lives in this browser on this computer. Export a backup regularly — and always before clearing browsing data or switching machines.</p>
     <div class="actions">
@@ -835,6 +939,9 @@ VIEWS.settings = function () {
 };
 
 AFTER.settings = function () {
+  document.getElementById('new-genre').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); ACTIONS['genre-add'](); }
+  });
   const file = document.getElementById('import-file');
   file.addEventListener('change', () => {
     const f = file.files[0];
@@ -963,18 +1070,52 @@ Object.assign(ACTIONS, {
   },
 
   'cat-filter': key => { ui.catalogFilter = key; render(); },
+  'cat-genre': genre => { ui.catalogGenre = genre; render(); },
+  'report-genre': genre => { ui.catalogGenre = genre; ui.catalogFilter = 'all'; ui.catalogQuery = ''; go('catalog'); },
+
+  'genre-add': () => {
+    const input = document.getElementById('new-genre');
+    const res = addGenre(input.value);
+    if (!res.ok) { toast(res.error, 'error'); return; }
+    toast(res.existed ? '"' + res.genre + '" is already on the list.' : 'Added "' + res.genre + '".', res.existed ? 'info' : 'ok');
+    render();
+    document.getElementById('new-genre').focus();
+  },
+  'genre-rename': name => {
+    const to = prompt('Rename "' + name + '" to:', name);
+    if (to == null || to.trim() === name) return;
+    const res = renameGenre(name, to);
+    if (!res.ok) { toast(res.error, 'error'); return; }
+    toast(res.merged ? 'Merged into "' + res.genre + '".' : 'Renamed to "' + res.genre + '".', 'ok');
+    render();
+  },
+  'genre-delete': name => {
+    const n = booksInGenre(name).length;
+    if (n && !confirm(plural(n, 'book is', 'books are') + ' in "' + name + '". Delete the genre and leave ' + (n === 1 ? 'that book' : 'those books') + ' without one?')) return;
+    deleteGenre(name);
+    toast('Deleted "' + name + '".', 'ok');
+    render();
+  },
+  'genre-defaults': () => {
+    const missing = DEFAULT_SETTINGS.genres.filter(g => !S().genres.some(x => normName(x) === normName(g)));
+    if (!missing.length) { toast('Every suggested genre is already on your list.', 'info'); return; }
+    missing.forEach(g => addGenre(g, true));
+    saveDB();
+    toast('Added back ' + plural(missing.length, 'suggested genre') + '.', 'ok');
+    render();
+  },
 
   'export-json': () => download('classroom-library-backup-' + stamp() + '.json', exportJSON(), 'application/json'),
   'import-json': () => document.getElementById('import-file').click(),
 
   'export-catalog-csv': () => {
-    const rows = [['Barcode', 'ISBN', 'Title', 'Author', 'Publisher', 'Year', 'Location', 'Tags', 'Status', 'With', 'Due', 'Times borrowed', 'Added']];
+    const rows = [['Barcode', 'ISBN', 'Title', 'Author', 'Publisher', 'Year', 'Genre', 'Tags', 'Status', 'With', 'Due', 'Times borrowed', 'Added']];
     const counts = {};
     DB.loans.forEach(l => { counts[l.itemId] = (counts[l.itemId] || 0) + 1; });
     DB.items.slice().sort(byTitle).forEach(i => {
       const loan = activeLoanForItem(i.id);
       const p = loan ? patronById(loan.patronId) : null;
-      rows.push([i.barcode, i.isbn, i.title, i.author, i.publisher, i.year, i.location, (i.tags || []).join('; '),
+      rows.push([i.barcode, i.isbn, i.title, i.author, i.publisher, i.year, i.genre, (i.tags || []).join('; '),
         loan ? (isOverdue(loan) ? 'Overdue' : 'Checked out') : 'On the shelf',
         p ? p.name : '', loan ? String(loan.dueAt).slice(0, 10) : '', counts[i.id] || 0, String(i.addedAt).slice(0, 10)]);
     });
@@ -1066,19 +1207,27 @@ function printOverdueNotices() {
   printHTML(html);
 }
 
+/* Grouped by genre, so the printout doubles as a checklist for sorting bins. */
 function printShelfList() {
-  const items = searchItems(ui.catalogQuery);
+  let items = searchItems(ui.catalogQuery);
+  if (ui.catalogGenre === '__none__') items = items.filter(i => !i.genre);
+  else if (ui.catalogGenre) items = items.filter(i => normName(i.genre) === normName(ui.catalogGenre));
+  const groups = {};
+  items.forEach(i => { (groups[i.genre || ''] = groups[i.genre || ''] || []).push(i); });
+  const names = Object.keys(groups).sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b));
   const html = `<section class="notice">
     <h1>${esc(S().libraryName)}</h1>
     <h2>Shelf list — ${plural(items.length, 'book')}</h2>
+    ${names.map(g => `
+    <h3>${esc(g || 'No genre yet')} <span class="notice-count">(${groups[g].length})</span></h3>
     <table>
       <thead><tr><th>Barcode</th><th>Title</th><th>Author</th><th>Status</th></tr></thead>
-      <tbody>${items.map(i => {
+      <tbody>${groups[g].map(i => {
         const loan = activeLoanForItem(i.id);
         const p = loan ? patronById(loan.patronId) : null;
         return `<tr><td>${esc(i.barcode)}</td><td>${esc(i.title)}</td><td>${esc(i.author)}</td><td>${loan ? 'Out — ' + esc(p ? p.name : '?') : 'Shelf'}</td></tr>`;
       }).join('')}</tbody>
-    </table>
+    </table>`).join('')}
     <p class="notice-foot">Printed ${esc(fmtDateFull(nowISO()))}</p>
   </section>`;
   printHTML(html);
@@ -1088,16 +1237,16 @@ function printShelfList() {
 
 function loadSampleData() {
   const books = [
-    ['Charlotte’s Web', 'E. B. White', '9780064400558', '1952'],
-    ['Bridge to Terabithia', 'Katherine Paterson', '9780064401845', '1977'],
-    ['Holes', 'Louis Sachar', '9780440414803', '1998'],
-    ['The Giver', 'Lois Lowry', '9780544336261', '1993'],
-    ['Brown Girl Dreaming', 'Jacqueline Woodson', '9780147515827', '2014'],
-    ['Wonder', 'R. J. Palacio', '9780375869020', '2012'],
-    ['Hatchet', 'Gary Paulsen', '9781416936473', '1986'],
-    ['Esperanza Rising', 'Pam Muñoz Ryan', '9780439120425', '2000']
+    ['Charlotte’s Web', 'E. B. White', '9780064400558', '1952', 'Fantasy'],
+    ['Bridge to Terabithia', 'Katherine Paterson', '9780064401845', '1977', 'Realistic Fiction'],
+    ['Holes', 'Louis Sachar', '9780440414803', '1998', 'Adventure'],
+    ['The Giver', 'Lois Lowry', '9780544336261', '1993', 'Science Fiction'],
+    ['Brown Girl Dreaming', 'Jacqueline Woodson', '9780147515827', '2014', 'Poetry & Novels in Verse'],
+    ['Wonder', 'R. J. Palacio', '9780375869020', '2012', 'Realistic Fiction'],
+    ['Hatchet', 'Gary Paulsen', '9781416936473', '1986', 'Adventure'],
+    ['Esperanza Rising', 'Pam Muñoz Ryan', '9780439120425', '2000', 'Historical Fiction']
   ];
-  books.forEach(b => addItem({ title: b[0], author: b[1], isbn: b[2], year: b[3], location: 'Classroom shelf' }));
+  books.forEach(b => addItem({ title: b[0], author: b[1], isbn: b[2], year: b[3], genre: b[4] }));
   ['Ava Nguyen', 'Marcus Bell', 'Priya Raman', 'Sam Ortiz'].forEach(n => addPatron(n));
 
   // A couple of live loans, one of them already late.

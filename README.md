@@ -19,6 +19,9 @@ students who check books out under their own name.</sub>
   Books without a barcode get one generated (`CL-0001`, `CL-0002`, …) for label printing.
 - **ISBN lookup** — type or scan an ISBN and the title, author, publisher, year and cover
   fill themselves in from Open Library (falling back to Google Books).
+- **Genres** — every book can carry one genre from a list you control, with a starter set
+  of fifteen. Filter the catalog by genre, print a shelf list grouped by genre for sorting
+  bins, and see which genres actually get borrowed.
 - **Holds** — a queue per book, with a "ready for pickup" list and a reminder at check-in
   when the returned book is spoken for.
 - **Reports** — what's out, what's overdue, most borrowed, busiest readers, never borrowed.
@@ -85,6 +88,28 @@ The intended rhythm at the desk, with a scanner and no mouse:
 Limits and holds are *soft* — the app warns and asks before letting you override, so the
 rules never stop you from doing the sensible thing in the moment.
 
+## Genres
+
+The starter list, chosen for a classroom collection:
+
+Adventure · Biography & Memoir · Fantasy · Graphic Novels · Historical Fiction · Humor ·
+Mystery · Mythology & Folktales · Nonfiction · Picture Books · Poetry & Novels in Verse ·
+Realistic Fiction · Science Fiction · Scary Stories · Sports
+
+Change it under **Settings → Genres**. Renaming a genre moves every book in it, and
+renaming one onto an existing genre merges the two — so "Scary Stories" → "Horror", or
+folding "Survival" into "Adventure", is one step. **Restore suggested genres** puts back
+any of the starter set you deleted. A new genre can also be added straight from the
+Genre menu while adding a book.
+
+After an ISBN lookup the app shows up to two **"Maybe:"** genres drawn from the book's
+subject headings. It never picks one for you: Open Library merges headings across every
+edition of a book, adaptations included, so *The Giver* comes back tagged as a graphic
+novel. Treat them as a shortcut, not an answer.
+
+**Reports → By genre** ranks genres by how often they're borrowed, including a
+per-book rate, which is the number to look at before buying more of something.
+
 ## Files
 
 ```
@@ -92,7 +117,7 @@ index.html      page shell
 styles.css      all styling; light and dark
 js/util.js      dates, formatting, CSV, toasts
 js/store.js     the data model and every rule (loans, holds, limits, merges, backup)
-js/lookup.js    ISBN → book data, via Open Library then Google Books
+js/lookup.js    ISBN → book data (Open Library, then Google Books), and genre hints
 js/app.js       routing, views, and the circulation-desk interaction
 ```
 
@@ -103,8 +128,14 @@ logic, hold order, merge behavior — so that's the file to open when the policy
 If it ever outgrows one machine, `js/store.js` is also the only file that needs to change:
 the views only ever talk to it through the functions it exports.
 
+## Updating the app
+
+`index.html` loads every file with a `?v=` number. **Bump it on every change you push**, or
+browsers (and GitHub Pages' ten-minute cache) can pair a new page with old scripts, which
+breaks the app until the cache expires.
+
 ## Trying it out
 
-**Settings → Load sample data** fills an empty library with eight books, four students,
+**Settings → Load sample data** fills an empty library with eight books across six genres, four students,
 a live loan, an overdue one and a hold, so you can see how it behaves before committing
 real books to it. **Settings → Erase everything** clears it when you're done.
