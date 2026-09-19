@@ -105,25 +105,37 @@ rules never stop you from doing the sensible thing in the moment.
 
 ## Genres
 
-The starter list, chosen for a classroom collection:
+Every book gets one of eight genres:
 
-Adventure · Biography & Memoir · Fantasy · Graphic Novels · Historical Fiction · Humor ·
-Mystery · Mythology & Folktales · Nonfiction · Picture Books · Poetry & Novels in Verse ·
-Realistic Fiction · Science Fiction · Scary Stories · Sports
+Adventure · Biography · Dystopian · Fantasy / Sci-Fi · Graphic Novels ·
+Historical Fiction · Nonfiction · Realistic Fiction
 
-Change it under **Settings → Genres**. Renaming a genre moves every book in it, and
-renaming one onto an existing genre merges the two — so "Scary Stories" → "Horror", or
-folding "Survival" into "Adventure", is one step. **Restore suggested genres** puts back
-any of the starter set you deleted. A new genre can also be added straight from the
-Genre menu while adding a book.
+Where the in-between kinds of books go:
+
+| Kind of book | Genre |
+| --- | --- |
+| Mystery, funny books, sports stories, novels in verse, picture books | Realistic Fiction |
+| Mythology, folktales, scary and ghost stories, science fiction | Fantasy / Sci-Fi |
+| Memoir | Biography |
+
+The list can be changed under **Settings → Genres**. Renaming a genre moves every book in
+it, and renaming one onto an existing genre merges the two. **Restore default genres** puts
+back any of the eight that were deleted.
 
 After an ISBN lookup the app shows up to two **"Maybe:"** genres drawn from the book's
-subject headings. It never picks one for you: Open Library merges headings across every
-edition of a book, adaptations included, so *The Giver* comes back tagged as a graphic
-novel. Treat them as a shortcut, not an answer.
+subject headings — it offered the right one for 15 of 16 well-known titles tested. It never
+picks one on its own, because Open Library merges headings across every edition of a book,
+adaptations included: *The Giver* comes back looking like a graphic novel.
 
 **Reports → By genre** ranks genres by how often they're borrowed, including a
 per-book rate, which is the number to look at before buying more of something.
+
+### Libraries set up before these eight
+
+A library saved with the earlier fifteen-genre list converts itself on first load, using
+the table above. Wherever a book's genre name changes, the old name is kept as a tag
+(a mystery lands in Realistic Fiction tagged "Mystery"), so searching for it still works.
+A genre someone invented has no known home, so it's cleared and kept as a tag instead.
 
 ## Files
 

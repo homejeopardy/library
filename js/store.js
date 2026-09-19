@@ -15,12 +15,28 @@ const DEFAULT_SETTINGS = {
   autoCreatePatrons: true,
   barcodePrefix: 'CL',
   nextBarcode: 1,
-  // A starting point for a classroom collection — rename, add or delete in Settings.
+  // The classroom's own categories — rename, add or delete in Settings.
   genres: [
-    'Adventure', 'Biography & Memoir', 'Fantasy', 'Graphic Novels', 'Historical Fiction',
-    'Humor', 'Mystery', 'Mythology & Folktales', 'Nonfiction', 'Picture Books',
-    'Poetry & Novels in Verse', 'Realistic Fiction', 'Science Fiction', 'Scary Stories', 'Sports'
-  ]
+    'Adventure', 'Biography', 'Dystopian', 'Fantasy / Sci-Fi',
+    'Graphic Novels', 'Historical Fiction', 'Nonfiction', 'Realistic Fiction'
+  ],
+  genreSet: 2
+};
+
+/* Set 1 was a 15-genre starter list. Moving a saved library to set 2 folds every one of
+   those into the classroom's eight, and keeps the old name as a tag wherever it changes
+   (a mystery lands in Realistic Fiction tagged "Mystery"), so searching still finds it. */
+const GENRE_SET_2_MAP = {
+  'fantasy': 'Fantasy / Sci-Fi',
+  'science fiction': 'Fantasy / Sci-Fi',
+  'mythology & folktales': 'Fantasy / Sci-Fi',
+  'scary stories': 'Fantasy / Sci-Fi',
+  'biography & memoir': 'Biography',
+  'mystery': 'Realistic Fiction',
+  'humor': 'Realistic Fiction',
+  'sports': 'Realistic Fiction',
+  'poetry & novels in verse': 'Realistic Fiction',
+  'picture books': 'Realistic Fiction'
 };
 
 function blankDB() {
@@ -35,7 +51,12 @@ function loadDB() {
   if (!raw) return blankDB();
   try {
     const parsed = JSON.parse(raw);
-    return migrate(parsed);
+    const db = migrate(parsed);
+    // Persist a one-time conversion now rather than whenever something next changes.
+    if ((parsed.settings || {}).genreSet !== db.settings.genreSet) {
+      try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch (e) { /* saved on next change */ }
+    }
+    return db;
   } catch (e) {
     console.error('Could not read saved library; starting empty.', e);
     return blankDB();
@@ -59,6 +80,23 @@ function migrate(parsed) {
     if (loc && !match) item.notes = (item.notes ? item.notes + '\n' : '') + 'Shelf: ' + loc;
     delete item.location;
   });
+
+  if (((parsed.settings && parsed.settings.genreSet) || 1) < 2) {
+    const target = DEFAULT_SETTINGS.genres;
+    db.items.forEach(item => {
+      if (!item.genre) return;
+      const key = normName(item.genre);
+      const same = target.find(g => normName(g) === key);
+      if (same) { item.genre = same; return; }
+      // A genre the teacher invented has no known home: it stays on the book as a tag.
+      const next = GENRE_SET_2_MAP[key] || '';
+      item.tags = Array.isArray(item.tags) ? item.tags : [];
+      if (!item.tags.some(t => normName(t) === key)) item.tags.push(item.genre);
+      item.genre = next;
+    });
+    db.settings.genres = target.slice();
+    db.settings.genreSet = 2;
+  }
   return db;
 }
 
@@ -471,9 +509,9 @@ function importJSON(text, mode) {
   const has = (arr, id) => arr.some(x => x.id === id);
   let added = { items: 0, patrons: 0, loans: 0, holds: 0 };
   (incoming.patrons || []).forEach(p => { if (!has(DB.patrons, p.id) && !findPatronByName(p.name)) { DB.patrons.push(p); added.patrons++; } });
-  migrate({ items: incoming.items || [], settings: { genres: S().genres } }).items
-    .forEach(i => { if (!has(DB.items, i.id) && !findItemByCode(i.barcode)) { DB.items.push(i); added.items++; } });
-  (incoming.items || []).forEach(i => { if (i.genre) addGenre(i.genre, true); });
+  const items = migrate({ items: incoming.items || [], settings: { genres: S().genres, genreSet: (incoming.settings || {}).genreSet } }).items;
+  items.forEach(i => { if (!has(DB.items, i.id) && !findItemByCode(i.barcode)) { DB.items.push(i); added.items++; } });
+  items.forEach(i => { if (i.genre) addGenre(i.genre, true); });
   (incoming.loans || []).forEach(l => { if (!has(DB.loans, l.id) && itemById(l.itemId) && patronById(l.patronId)) { DB.loans.push(l); added.loans++; } });
   (incoming.holds || []).forEach(h => { if (!has(DB.holds, h.id) && itemById(h.itemId) && patronById(h.patronId)) { DB.holds.push(h); added.holds++; } });
   saveDB();

@@ -146,25 +146,24 @@ async function lookupISBN(raw) {
    --------------------------------------------------------------- */
 const GENRE_HINTS = [
   ['Graphic Novels', /graphic novel|comic books?, strips|\bcomics\b|\bmanga\b/],
-  ['Picture Books', /picture books/],
-  ['Poetry & Novels in Verse', /novels in verse|\bpoetry\b|\bpoems\b|stories in rhyme/],
-  ['Biography & Memoir', /biograph|memoir|autobiograph/],
-  ['Science Fiction', /science fiction|dystopia/],
-  ['Fantasy', /\bfantasy\b|\bmagic\b|dragons|wizards/],
-  ['Mystery', /mystery|mysteries|detective/],
-  ['Scary Stories', /horror|ghost stories|\bghosts\b|supernatural/],
-  ['Mythology & Folktales', /mytholog|folklore|fairy tales|folk tales|legends/],
+  ['Biography', /biograph|memoir|autobiograph/],
+  ['Dystopian', /dystopia|totalitarian|post-apocalyptic/, 'decisive'],
+  ['Fantasy / Sci-Fi', /\bfantasy\b|\bmagic\b|dragons|wizards|science fiction|mytholog|folklore|fairy tales|horror|ghost stories|\bghosts\b|supernatural/],
   ['Historical Fiction', /historical fiction|history[^|]*fiction/],
-  ['Sports', /\bsports\b|baseball|basketball|soccer|football/],
-  ['Humor', /humorous|\bhumor\b/],
-  ['Adventure', /adventure|survival/]
+  ['Adventure', /adventure|survival/],
+  // Realistic Fiction is also where mysteries, funny books, sports and verse novels go.
+  ['Realistic Fiction', /realistic fiction|mystery|mysteries|detective|humorous|\bhumor\b|\bsports\b|baseball|basketball|soccer|novels in verse|friendship[^|]*fiction|family[^|]*fiction|schools[^|]*fiction/]
+  // No Nonfiction hint: informational subject headings look like everything else's.
 ];
 
+/* 'decisive' marks headings that only ever appear on that kind of book. Dystopian novels
+   also collect piles of generic Adventure / Science Fiction headings (The Hunger Games has
+   eight "adventure" ones), so a single dystopia heading outranks any count of those. */
 function suggestGenres(subjects, genres, max) {
   const score = {};
   (subjects || []).forEach(sub => {
     const t = String(sub).toLowerCase();
-    GENRE_HINTS.forEach(([g, re]) => { if (re.test(t)) score[g] = (score[g] || 0) + 1; });
+    GENRE_HINTS.forEach(([g, re, decisive]) => { if (re.test(t)) score[g] = (score[g] || 0) + (decisive ? 1000 : 1); });
   });
   return Object.keys(score)
     .sort((a, b) => score[b] - score[a])

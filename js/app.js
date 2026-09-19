@@ -954,7 +954,7 @@ VIEWS.settings = function () {
       <label class="field"><span>New genre</span><input id="new-genre" autocomplete="off" placeholder="e.g. Animal Stories"></label>
       <button class="btn" data-act="genre-add">Add</button>
     </div>
-    <div class="actions"><button class="btn btn-quiet" data-act="genre-defaults">Restore suggested genres</button></div>
+    <div class="actions"><button class="btn btn-quiet" data-act="genre-defaults">Restore default genres</button></div>
 
     <h2 class="section-title">Backup</h2>
     <p class="hint">Everything lives in this browser on this computer. Export a backup regularly — and always before clearing browsing data or switching machines.</p>
@@ -1133,10 +1133,10 @@ Object.assign(ACTIONS, {
   },
   'genre-defaults': () => {
     const missing = DEFAULT_SETTINGS.genres.filter(g => !S().genres.some(x => normName(x) === normName(g)));
-    if (!missing.length) { toast('Every suggested genre is already on your list.', 'info'); return; }
+    if (!missing.length) { toast('Every default genre is already on your list.', 'info'); return; }
     missing.forEach(g => addGenre(g, true));
     saveDB();
-    toast('Added back ' + plural(missing.length, 'suggested genre') + '.', 'ok');
+    toast('Added back ' + plural(missing.length, 'default genre') + '.', 'ok');
     render();
   },
 
@@ -1272,11 +1272,11 @@ function printShelfList() {
 
 function loadSampleData() {
   const books = [
-    ['Charlotte’s Web', 'E. B. White', '9780064400558', '1952', 'Fantasy'],
+    ['Charlotte’s Web', 'E. B. White', '9780064400558', '1952', 'Fantasy / Sci-Fi'],
     ['Bridge to Terabithia', 'Katherine Paterson', '9780064401845', '1977', 'Realistic Fiction'],
     ['Holes', 'Louis Sachar', '9780440414803', '1998', 'Adventure'],
-    ['The Giver', 'Lois Lowry', '9780544336261', '1993', 'Science Fiction'],
-    ['Brown Girl Dreaming', 'Jacqueline Woodson', '9780147515827', '2014', 'Poetry & Novels in Verse'],
+    ['The Giver', 'Lois Lowry', '9780544336261', '1993', 'Dystopian'],
+    ['Brown Girl Dreaming', 'Jacqueline Woodson', '9780147515827', '2014', 'Biography'],
     ['Wonder', 'R. J. Palacio', '9780375869020', '2012', 'Realistic Fiction'],
     ['Hatchet', 'Gary Paulsen', '9781416936473', '1986', 'Adventure'],
     ['Esperanza Rising', 'Pam Muñoz Ryan', '9780439120425', '2000', 'Historical Fiction']
