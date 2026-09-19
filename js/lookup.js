@@ -19,7 +19,7 @@ async function fetchJSON(url, ms) {
   const timer = setTimeout(() => ctrl.abort(), ms || 8000);
   try {
     const res = await fetch(url, { signal: ctrl.signal });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) throw Object.assign(new Error('HTTP ' + res.status), { status: res.status });
     return await res.json();
   } finally {
     clearTimeout(timer);
@@ -37,19 +37,59 @@ function uniq(list) {
   });
 }
 
-async function lookupOpenLibrary(isbn) {
-  const url = 'https://openlibrary.org/api/books?bibkeys=ISBN:' + encodeURIComponent(isbn) + '&format=json&jscmd=data';
-  const data = await fetchJSON(url);
-  const rec = data && data['ISBN:' + isbn];
-  if (!rec) return null;
+/* Open Library's search index: one request, CORS-enabled, includes author names.
+   (Their older /api/books endpoint was retired in 2026 and now 404s.) */
+async function lookupOpenLibrarySearch(isbn) {
+  const url = 'https://openlibrary.org/search.json?isbn=' + encodeURIComponent(isbn) +
+    '&fields=title,subtitle,author_name,publisher,first_publish_year,publish_year,cover_i,subject&limit=1';
+  // The search index merges every edition of a book, so its publisher and year
+  // can belong to some other printing. Ask for the exact edition alongside it.
+  const [data, ed] = await Promise.all([
+    fetchJSON(url),
+    fetchJSON('https://openlibrary.org/isbn/' + encodeURIComponent(isbn) + '.json', 6000).catch(() => null)
+  ]);
+  const doc = data && data.docs && data.docs[0];
+  if (!doc || !doc.title) return null;
+  const edYear = ed && (String(ed.publish_date || '').match(/\d{4}/) || [''])[0];
   return {
     isbn: isbn,
-    title: rec.subtitle ? rec.title + ': ' + rec.subtitle : rec.title,
-    author: uniq((rec.authors || []).map(a => a.name)).join(', '),
-    publisher: uniq((rec.publishers || []).map(p => p.name)).join(', '),
-    year: (String(rec.publish_date || '').match(/\d{4}/) || [''])[0],
-    cover: (rec.cover && (rec.cover.medium || rec.cover.large || rec.cover.small)) || '',
-    tags: uniq((rec.subjects || []).map(s => s.name)).slice(0, 4),
+    title: doc.subtitle ? doc.title + ': ' + doc.subtitle : doc.title,
+    author: uniq(doc.author_name || []).join(', '),
+    publisher: ed && ed.publishers ? uniq(ed.publishers).slice(0, 1).join('') : '',
+    year: edYear || String(doc.first_publish_year || ''),
+    cover: doc.cover_i ? 'https://covers.openlibrary.org/b/id/' + doc.cover_i + '-M.jpg' : '',
+    tags: uniq(doc.subject || []).slice(0, 4),
+    source: 'Open Library'
+  };
+}
+
+/* The edition record itself. Catches brand-new books the search index hasn't
+   picked up yet, at the cost of one extra request per author name. */
+async function lookupOpenLibraryEdition(isbn) {
+  let ed;
+  try {
+    ed = await fetchJSON('https://openlibrary.org/isbn/' + encodeURIComponent(isbn) + '.json');
+  } catch (e) {
+    if (e.status === 404) return null; // unknown ISBN, not an outage
+    throw e;
+  }
+  if (!ed || !ed.title) return null;
+  // Many editions only point at their "work"; the authors live there instead.
+  let authorKeys = (ed.authors || []).map(a => a.key);
+  if (!authorKeys.length && ed.works && ed.works[0]) {
+    const work = await fetchJSON('https://openlibrary.org' + ed.works[0].key + '.json', 5000).catch(() => null);
+    authorKeys = ((work && work.authors) || []).map(a => a.author && a.author.key).filter(Boolean);
+  }
+  const names = await Promise.all(authorKeys.slice(0, 3).map(key =>
+    fetchJSON('https://openlibrary.org' + key + '.json', 5000).then(r => r.name).catch(() => '')));
+  return {
+    isbn: isbn,
+    title: ed.subtitle ? ed.title + ': ' + ed.subtitle : ed.title,
+    author: uniq(names).join(', '),
+    publisher: uniq(ed.publishers || []).slice(0, 1).join(''),
+    year: (String(ed.publish_date || '').match(/\d{4}/) || [''])[0],
+    cover: ed.covers && ed.covers[0] > 0 ? 'https://covers.openlibrary.org/b/id/' + ed.covers[0] + '-M.jpg' : '',
+    tags: [],
     source: 'Open Library'
   };
 }
@@ -71,19 +111,24 @@ async function lookupGoogleBooks(isbn) {
   };
 }
 
-/* Resolves to book data, or null if neither service knows the ISBN.
-   Rejects only when both services are unreachable (offline). */
+/* Resolves to book data, or null if no service knows the ISBN.
+   Rejects with 'offline' when nothing could be reached at all, or
+   'unavailable' when services answered but only with errors (outage,
+   rate limit) — two different things to tell the teacher. */
 async function lookupISBN(raw) {
   const isbn = isbnDigits(raw);
   if (!isbn) return null;
-  let reachable = false;
-  for (const fn of [lookupOpenLibrary, lookupGoogleBooks]) {
+  let answered = false, healthy = false;
+  for (const fn of [lookupOpenLibrarySearch, lookupOpenLibraryEdition, lookupGoogleBooks]) {
     try {
       const res = await fn(isbn);
-      reachable = true;
+      answered = healthy = true;
       if (res && res.title) return res;
-    } catch (e) { /* try the next service */ }
+    } catch (e) {
+      if (e.status) answered = true; // the server replied, just not usefully
+      console.warn('ISBN lookup: ' + fn.name + ' failed', e);
+    }
   }
-  if (!reachable) throw new Error('offline');
-  return null;
+  if (healthy) return null;
+  throw new Error(answered ? 'unavailable' : 'offline');
 }

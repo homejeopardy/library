@@ -414,7 +414,9 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
         status.textContent = 'Found in ' + data.source + '. Check it, then save.';
         get('title').focus();
       } catch (e) {
-        status.textContent = 'Could not reach the lookup services — you can still type the details in.';
+        status.textContent = e.message === 'offline'
+          ? 'No internet connection — you can still type the details in.'
+          : 'The book lookup services are not responding right now — try again later, or type the details in.';
       }
     }
 
