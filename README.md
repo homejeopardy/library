@@ -1,12 +1,24 @@
 # Classroom Library
 
 A small, fast circulation system for a classroom or department book collection.
-It runs entirely in the browser — no server, no database, no accounts, no cost.
+It runs entirely in the browser — no server and no cost; the optional sync uses a private
+GitHub repository as its database.
 
-**Live app:** https://homejeopardy.github.io/library/ *(after enabling GitHub Pages — see below)*
+**Admin:** https://lib.catherine-crump.com/ · **Students:** https://lib.catherine-crump.com/student/
 
 <sub>Built for a single-shelf collection: a few hundred books, one adult running the desk,
 students who check books out under their own name.</sub>
+
+Two pages, one library:
+
+- **Admin page** — `/` — the circulation desk, catalog, students, holds, reports and settings.
+- **Student page** — `/student/` — for a classroom device. Students type their name (new
+  names are added on the spot), then scan to check out and return books, find books and
+  get in line for ones that are out. It never shows who has a book, and signs the student
+  out after 90 seconds without a touch.
+
+With sync turned on, every device — your computers and the student station — shares one
+library, kept in a private GitHub repository.
 
 ## What it does
 
@@ -48,19 +60,73 @@ In the repository: **Settings → Pages → Source: Deploy from a branch → `ma
 A minute later the app is live at `https://homejeopardy.github.io/library/`, and any
 device on any network can open it.
 
-## Where the data lives — read this part
+## Where the data lives
 
-Everything is stored in **the browser's `localStorage`, on the computer you use it from**.
-That's what makes it free and instant, and it has three consequences worth knowing:
+Each device keeps its own working copy in the browser, so the app is instant and keeps
+working when the Wi-Fi drops.
 
-1. **The data does not follow you between computers or browsers.** Chrome on the desk
-   machine and Safari on your laptop are two separate libraries.
-2. **Clearing "browsing data" or "cookies and site data" erases the library.**
-3. **Publishing to GitHub Pages publishes the *app*, not your data.** Your books and
-   students never leave your machine — nothing is uploaded anywhere.
+- **Without sync**, that copy is the only one. It doesn't follow you to another computer,
+  clearing browsing data erases it, and **Settings → Download backup** is your safety net.
+- **With sync**, every change also goes to two files in a private GitHub repository, and
+  every device picks up the others' changes. GitHub keeps every earlier version.
 
-So: **Settings → Download backup**, regularly. The JSON file it produces restores the whole
-library on any machine (Settings → Restore from backup), which is also how you move it.
+## Syncing across devices
+
+Everything is stored as two JSON files — `catalog.json` (books, settings) and
+`circulation.json` (students, loans, holds) — in a **private** repository. Private
+matters: those files hold students' names and what each of them has borrowed, and the
+app's own repository is public.
+
+### One-time setup (about 10 minutes)
+
+1. **Create the data repository.** On GitHub: **New repository** → name it
+   `library-data` → choose **Private** → **Create repository**. Nothing needs to go in it.
+2. **Create an access key.** GitHub → your profile picture → **Settings** →
+   **Developer settings** → **Personal access tokens** → **Fine-grained tokens** →
+   **Generate new token**:
+   - Name: `Classroom Library`
+   - Expiration: the longest it offers — and put a reminder in your calendar for the day before
+   - Repository access: **Only select repositories** → `library-data`
+   - Permissions → Repository permissions → **Contents: Read and write**
+   - **Generate token**, and copy it (it starts `github_pat_`). GitHub shows it once.
+3. **Your main computer first** — the one that already has your library. Admin page →
+   **Settings → Sync across devices** → paste the key → **Connect**. Your books and
+   students upload.
+4. **Any other computer:** same thing. It downloads the shared library.
+5. **The student station:** open `/student/` on the classroom device, paste the same key,
+   **Connect**. Bookmark it or make it the home page.
+
+If a device that already had its own library connects to a shared library that also has
+one, it asks whether to keep both (merge) or use only the shared one — and in the second
+case downloads the device's old library as a backup file first.
+
+### Day to day
+
+- A change shows up on the other devices within about 20 seconds, and immediately when you
+  switch back to the tab. Background tabs don't check, to save GitHub requests; your own
+  changes always upload straight away.
+- The indicator in the top bar says **Synced**, **Saving…**, **Offline**, or **Sync problem**
+  (click it for details). The student page shows it only when something's wrong.
+- **Offline**, everything keeps working and catches up when the connection returns.
+- **Two devices saving at the same moment** is fine: GitHub refuses the second write, and
+  the app merges record by record and tries again. If the *same* record was changed on
+  both, the device that saved last wins.
+- **History:** every change is a commit in `library-data`, one record per line, so you can
+  see exactly what changed when — and restore any earlier version of a file.
+
+### When the key expires
+
+Devices show **"GitHub rejected the access key"**. Make a new key (step 2), then paste it
+in **Settings → Replace access key** on each computer, and on the student station's
+setup screen. Nothing is lost — changes made in the meantime upload once the key works.
+
+### What the key can and can't protect
+
+Anyone holding the key can read and change `library-data` (and nothing else). It's stored
+in the browser of each device you paste it into. The student station hides the admin page
+behind the key, but a student who knows how to use the browser's developer tools could
+dig the key out. If that ever happens: GitHub → the token → **Delete**, make a new one,
+and paste it on your devices. The history lets you undo any changes made with the old key.
 
 ## Keyboard-only desk flow
 
@@ -140,24 +206,34 @@ A genre someone invented has no known home, so it's cleared and kept as a tag in
 ## Files
 
 ```
-index.html      page shell
-styles.css      all styling; light and dark
-js/util.js      dates, formatting, CSV, toasts
-js/store.js     the data model and every rule (loans, holds, limits, merges, backup)
+index.html          admin page
+student/index.html  student page
+styles.css          all styling; light and dark
+kiosk.css           student-page layout (big type, big targets)
+js/config.js        which GitHub repository holds the shared data
+js/util.js          dates, formatting, CSV, toasts
+js/store.js         the data model and every rule (loans, holds, limits, merges, backup)
+js/sync.js          GitHub sync: fetch, three-way merge, write, retry
+js/kiosk.js         the student page
 js/lookup.js    ISBN → book data (Open Library, then Google Books), and genre hints
-js/app.js       routing, views, and the circulation-desk interaction
+js/app.js           admin page: routing, views, and the circulation desk
+dev/mock_github_api.py  a local stand-in for GitHub's API, for testing sync
 ```
 
 Plain JavaScript with no framework and no build step, so the whole thing stays editable
 by anyone who can read HTML. Every rule lives in `js/store.js` — loan length, overdue
 logic, hold order, merge behavior — so that's the file to open when the policy changes.
 
-If it ever outgrows one machine, `js/store.js` is also the only file that needs to change:
-the views only ever talk to it through the functions it exports.
+Sync sits beside the store rather than inside it: `js/store.js` announces each change, and
+`js/sync.js` merges and uploads. Neither page knows how sync works.
+
+To test sync without a GitHub account, run `python3 dev/mock_github_api.py`, then on the
+local copy of the app set `localStorage['classroom-library-dev-api'] = 'http://localhost:8788'`
+and connect with the key `test-key`.
 
 ## Updating the app
 
-`index.html` loads every file with a `?v=` number. **Bump it on every change you push**, or
+`index.html` and `student/index.html` load every file with a `?v=` number. **Bump it in both on every change you push**, or
 browsers (and GitHub Pages' ten-minute cache) can pair a new page with old scripts, which
 breaks the app until the cache expires.
 

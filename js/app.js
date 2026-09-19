@@ -56,6 +56,10 @@ document.addEventListener('keydown', e => {
 
 function render() {
   document.getElementById('brand-name').textContent = S().libraryName || 'Classroom Library';
+  renderSyncPill();
+  const locked = Sync.stationOnly();
+  document.getElementById('tabs').hidden = locked;
+  if (locked) { renderStationLock(); return; }
   document.title = (S().libraryName || 'Classroom Library');
   Array.from(document.querySelectorAll('.tab')).forEach(t => {
     t.classList.toggle('active', t.dataset.route === route);
@@ -68,6 +72,119 @@ function render() {
 
   view.innerHTML = VIEWS[route]();
   if (AFTER[route]) AFTER[route]();
+}
+
+/* Data changed underneath us (another device, or another tab). Re-render, but never
+   while someone is mid-typing in a field — wait until they leave it. */
+let renderDeferred = false;
+function refreshFromElsewhere() {
+  if (circ.item) circ.item = itemById(circ.item.id);
+  if (circ.patron) circ.patron = patronById(circ.patron.id);
+  if (circ.matches) circ.matches = circ.matches.map(i => itemById(i.id)).filter(Boolean);
+  const a = document.activeElement;
+  if (a && view.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value) { renderDeferred = true; return; }
+  render();
+}
+view.addEventListener('focusout', () => setTimeout(() => {
+  const a = document.activeElement;
+  if (!renderDeferred || (a && view.contains(a) && a.value)) return;
+  renderDeferred = false;
+  render();
+}, 0));
+window.addEventListener('library:reloaded', refreshFromElsewhere);
+
+/* ================================ SYNC ================================ */
+
+function renderSyncPill() {
+  const pill = document.getElementById('sync-pill');
+  const d = Sync.describe();
+  pill.hidden = d.tone === 'off';
+  pill.className = 'sync-pill ' + d.tone;
+  pill.textContent = d.text;
+  pill.title = Sync.status().detail || (Sync.status().at ? 'Last synced ' + new Date(Sync.status().at).toLocaleTimeString() : '');
+  const line = document.getElementById('sync-status-line');
+  if (line) line.innerHTML = syncStatusLine();
+}
+window.addEventListener('sync:status', renderSyncPill);
+document.getElementById('sync-pill').addEventListener('click', () => go('settings'));
+
+function syncStatusLine() {
+  const st = Sync.status();
+  const d = Sync.describe();
+  const when = st.at ? ' · last synced ' + esc(new Date(st.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) : '';
+  return `<span class="sync-dot ${d.tone}"></span> ${esc(d.text || 'Not connected')}${when}` +
+    (st.detail ? `<br><span class="${st.state === 'error' ? 'danger' : 'muted'}">${esc(st.detail)}</span>` : '');
+}
+
+function syncSettingsHTML() {
+  if (!Sync.configured()) return `
+    <p class="hint">Keep this library the same on every computer and on the student station. The data is saved to a
+      <strong>private</strong> GitHub repository, <code>${esc(Sync.repo())}</code>.
+      <a href="https://github.com/homejeopardy/library#syncing-across-devices" target="_blank" rel="noopener">Setup steps</a></p>
+    <div class="lookup-row">
+      <label class="field"><span>GitHub access key</span>
+        <input id="sync-key" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
+      <button class="btn btn-primary" data-act="sync-connect">Connect</button>
+    </div>`;
+  return `
+    <p>Connected to <code>${esc(Sync.repo())}</code>.</p>
+    <p class="sync-line" id="sync-status-line">${syncStatusLine()}</p>
+    <div class="actions">
+      <button class="btn" data-act="sync-now">Sync now</button>
+      <button class="btn btn-quiet" data-act="sync-disconnect">Disconnect this computer</button>
+    </div>
+    <p class="hint">Student station: open <code>${esc(location.origin)}/student/</code> on the classroom device and paste the same access key there.
+      A new key (when the old one expires) goes in the box below.</p>
+    <div class="lookup-row">
+      <label class="field"><span>Replace access key</span>
+        <input id="sync-key" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
+      <button class="btn" data-act="sync-connect">Update key</button>
+    </div>`;
+}
+
+/* Shared by the Settings button and the station lock screen. */
+async function connectWithKey(key, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+  try {
+    const res = await Sync.connect(key);
+    if (res.next === 'ask') {
+      const s = res.summary;
+      const keepBoth = confirm(
+        'The shared library already has ' + plural(s.remoteBooks, 'book') + ' and ' + plural(s.remoteStudents, 'student') + '.\n' +
+        'This computer has ' + plural(s.localBooks, 'book') + ' and ' + plural(s.localStudents, 'student') + ' of its own.\n\n' +
+        'OK = keep both: add this computer\'s books and students to the shared library.\n' +
+        'Cancel = use the shared library and set aside what is on this computer.');
+      if (!keepBoth) download('classroom-library-before-sync-' + stamp() + '.json', exportJSON(), 'application/json');
+      Sync.adopt(s, keepBoth ? 'merge' : 'shared');
+      if (!keepBoth) toast('This computer\'s old library was downloaded as a backup file, just in case.', 'info');
+    }
+    await Sync.syncNow();
+    const st = Sync.status();
+    if (st.state === 'error' || st.state === 'offline') toast(st.detail, 'error');
+    else toast('Connected — this computer now syncs with the shared library.', 'ok');
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    render();
+  }
+}
+
+function renderStationLock() {
+  view.innerHTML = `
+  <section class="pane narrow station-lock">
+    <h2>This computer is the student station</h2>
+    <p>Students use <a href="student/">the student page</a>. To run the admin page here, paste the GitHub access key.</p>
+    <div class="lookup-row">
+      <label class="field"><span>GitHub access key</span>
+        <input id="sync-key" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
+      <button class="btn btn-primary" id="unlock">Unlock</button>
+    </div>
+  </section>`;
+  const input = document.getElementById('sync-key');
+  const btn = document.getElementById('unlock');
+  btn.addEventListener('click', () => connectWithKey(input.value, btn));
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') connectWithKey(input.value, btn); });
+  input.focus();
 }
 
 /* ============================ CIRCULATION ============================ */
@@ -935,6 +1052,9 @@ VIEWS.settings = function () {
     </label>
     <div class="actions"><button class="btn btn-primary" data-act="save-settings">Save settings</button></div>
 
+    <h2 class="section-title">Sync across devices</h2>
+    ${syncSettingsHTML()}
+
     <h2 class="section-title">Genres</h2>
     <p class="hint">These are the choices in the Genre menu when you add a book. Renaming a genre updates every book in it; renaming one onto another merges them.</p>
     <ul class="genre-admin">
@@ -957,7 +1077,9 @@ VIEWS.settings = function () {
     <div class="actions"><button class="btn btn-quiet" data-act="genre-defaults">Restore default genres</button></div>
 
     <h2 class="section-title">Backup</h2>
-    <p class="hint">Everything lives in this browser on this computer. Export a backup regularly — and always before clearing browsing data or switching machines.</p>
+    <p class="hint">${Sync.configured()
+      ? 'The shared library keeps every earlier version in its GitHub history, so a backup file is an extra safety net rather than the only one.'
+      : 'Everything lives in this browser on this computer. Export a backup regularly — and always before clearing browsing data or switching machines.'}</p>
     <div class="actions">
       <button class="btn" data-act="export-json">Download backup</button>
       <button class="btn" data-act="import-json">Restore from backup…</button>
@@ -966,7 +1088,7 @@ VIEWS.settings = function () {
 
     <h2 class="section-title">Danger zone</h2>
     <div class="actions">
-      <button class="btn" data-act="load-sample" ${DB.items.length ? 'disabled title="Only available on an empty library"' : ''}>Load sample data</button>
+      <button class="btn" data-act="load-sample" ${DB.items.length || Sync.configured() ? 'disabled title="Only available on an empty library that is not syncing"' : ''}>Load sample data</button>
       <button class="btn btn-danger" data-act="reset-all">Erase everything</button>
     </div>
     <p class="hint">Storage in use: ${esc(storageSize())}</p>
@@ -974,6 +1096,8 @@ VIEWS.settings = function () {
 };
 
 AFTER.settings = function () {
+  const key = document.getElementById('sync-key');
+  if (key) key.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ACTIONS['sync-connect'](null, view.querySelector('[data-act="sync-connect"]')); } });
   document.getElementById('new-genre').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); ACTIONS['genre-add'](); }
   });
@@ -983,7 +1107,7 @@ AFTER.settings = function () {
     if (!f) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const mode = confirm('OK = replace everything with this backup.\nCancel = merge it into the current library.') ? 'replace' : 'merge';
+      const mode = confirm('OK = replace everything with this backup' + (Sync.configured() ? ' (on every synced device)' : '') + '.\nCancel = merge it into the current library.') ? 'replace' : 'merge';
       const res = importJSON(String(reader.result), mode);
       if (!res.ok) { toast(res.error, 'error'); return; }
       toast(mode === 'replace' ? 'Backup restored.' : 'Merged: ' + res.added.items + ' books, ' + res.added.patrons + ' students.', 'ok');
@@ -1189,8 +1313,25 @@ Object.assign(ACTIONS, {
     render();
   },
 
+  'sync-connect': (id, btn) => connectWithKey(document.getElementById('sync-key').value, btn),
+  'sync-now': async (id, btn) => {
+    btn.disabled = true;
+    await Sync.syncNow();
+    const st = Sync.status();
+    toast(st.state === 'ok' ? 'Up to date.' : st.detail, st.state === 'ok' ? 'ok' : 'error');
+    render();
+  },
+  'sync-disconnect': () => {
+    if (!confirm('Stop syncing on this computer? Its copy of the library stays here; other devices keep the shared library.')) return;
+    Sync.disconnect();
+    toast('This computer no longer syncs.', 'ok');
+    render();
+  },
+
   'reset-all': () => {
-    if (!confirm('Erase every book, student and loan? Export a backup first if you might want any of it back.')) return;
+    if (!confirm(Sync.configured()
+      ? 'Erase every book, student and loan — in the SHARED library, on every device and the student station? (Earlier versions stay in the GitHub history.)'
+      : 'Erase every book, student and loan? Export a backup first if you might want any of it back.')) return;
     if (!confirm('Really erase everything? This cannot be undone.')) return;
     resetDB();
     toast('Library erased.', 'ok');

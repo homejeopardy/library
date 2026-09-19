@@ -100,13 +100,30 @@ function migrate(parsed) {
   return db;
 }
 
-function saveDB() {
+function persistQuietly() {
   try {
     localStorage.setItem(DB_KEY, JSON.stringify(DB));
+    return true;
   } catch (e) {
     toast('Could not save — browser storage is full or blocked. Export a backup now.', 'error');
+    return false;
   }
 }
+
+/* Every change made on this device goes through here; sync.js listens for the event.
+   (Changes arriving *from* other devices are written with persistQuietly instead.) */
+function saveDB() {
+  persistQuietly();
+  window.dispatchEvent(new Event('library:changed'));
+}
+
+/* The admin page and student page may be open in two tabs of one browser: when the
+   other tab saves, pick up its copy rather than overwriting it with a stale one. */
+window.addEventListener('storage', e => {
+  if (e.key !== DB_KEY) return;
+  DB = loadDB();
+  window.dispatchEvent(new Event('library:reloaded'));
+});
 
 const S = () => DB.settings;
 

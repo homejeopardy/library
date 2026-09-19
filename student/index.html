@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" data-role="student">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library</title>
+<!-- Bump ?v= on every release, in step with ../index.html. -->
+<link rel="stylesheet" href="../styles.css?v=14">
+<link rel="stylesheet" href="../kiosk.css?v=14">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+</head>
+<body class="kiosk">
+
+<header class="k-bar">
+  <div class="brand"><span class="brand-mark" aria-hidden="true">📚</span> <span id="brand-name">Library</span></div>
+  <span id="sync-pill" class="sync-pill" hidden></span>
+</header>
+
+<main id="kiosk" class="k-main"></main>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script src="../js/config.js?v=14"></script>
+<script src="../js/util.js?v=14"></script>
+<script src="../js/store.js?v=14"></script>
+<script src="../js/sync.js?v=14"></script>
+<script src="../js/kiosk.js?v=14"></script>
+</body>
+</html>

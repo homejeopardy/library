@@ -58,6 +58,7 @@ body {
 }
 
 h1, h2, h3 { line-height: 1.25; }
+a { color: var(--accent); }
 
 /* ---------------- top bar ---------------- */
 
@@ -109,6 +110,42 @@ h1, h2, h3 { line-height: 1.25; }
   font-weight: 700;
   text-align: center;
 }
+
+/* ---------------- sync status ---------------- */
+
+.sync-pill {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px 3px 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+}
+.sync-pill::before, .sync-dot {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.sync-pill::before { position: absolute; left: 10px; top: 50%; margin-top: -3.5px; }
+.sync-pill.ok::before, .sync-dot.ok { background: var(--ok); }
+.sync-pill.busy::before, .sync-dot.busy { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+.sync-pill.warn, .sync-pill.error { color: var(--text); }
+.sync-pill.warn::before, .sync-dot.warn { background: var(--warn); }
+.sync-pill.error { border-color: var(--danger); }
+.sync-pill.error::before, .sync-dot.error { background: var(--danger); }
+@keyframes pulse { 50% { opacity: .3; } }
+.sync-line { font-size: 14px; margin: 6px 0 0; }
+.station-lock h2 { margin-top: 24px; }
+code { font-family: var(--mono); font-size: .92em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
 
 /* ---------------- layout ---------------- */
 

@@ -1,0 +1,99 @@
+/* ---------------------------------------------------------------
+   Student station: the same tokens as the admin page, scaled up for
+   a shared classroom device — big type, big targets, one column.
+   --------------------------------------------------------------- */
+
+body.kiosk { font-size: 17px; }
+
+.k-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.k-bar .sync-pill { cursor: default; }
+
+.k-main { max-width: 760px; margin: 0 auto; padding: 28px 16px 80px; }
+
+.k-welcome { text-align: center; padding-top: 4vh; }
+.k-welcome h1 { font-size: 30px; margin: 0 0 8px; letter-spacing: -.01em; }
+.k-lead { color: var(--text-muted); margin: 0 0 22px; }
+
+.k-box { position: relative; text-align: left; }
+.k-input {
+  width: 100%;
+  padding: 18px 20px;
+  font: inherit;
+  font-size: 22px;
+  color: var(--text);
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+.k-input:focus { outline: none; border-color: var(--accent); }
+
+.k-suggest {
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  z-index: 10;
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.k-suggest button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px 14px;
+  font: inherit;
+  font-size: 19px;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.k-suggest button:hover, .k-suggest button:focus { background: var(--accent-soft); color: var(--accent); outline: none; }
+
+.k-result { margin-top: 18px; padding: 16px 18px; border-radius: 12px; text-align: left; border: 1px solid var(--border); background: var(--surface); }
+.k-result.ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.k-result.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.k-result.info { background: var(--accent-soft); border-color: transparent; color: var(--text); }
+.k-result.plain { padding: 6px 12px; }
+.k-result strong { color: var(--text); }
+.k-result .actions { margin-top: 12px; }
+.k-result .btn, .k-done { padding: 12px 18px; font-size: 16px; }
+
+.k-hello { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.k-hello h1 { margin: 0; font-size: 30px; }
+
+.k-banner { margin: 0 0 14px; padding: 14px 16px; border-radius: 12px; background: var(--ok-soft); color: var(--ok); }
+.k-banner strong { color: var(--text); }
+
+.k-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 26px; }
+.k-columns h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin: 0 0 8px; }
+
+.k-list { list-style: none; margin: 0; padding: 0; }
+.k-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.k-list li:last-child { border-bottom: 0; }
+.k-list-text { display: flex; flex-direction: column; flex: 1; min-width: 0; font-size: 15px; }
+.k-list-text strong { font-size: 16px; }
+.k-list .link { flex: none; font-size: 14px; }
+
+.k-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: var(--shadow); }
+.k-card h1 { margin-top: 0; font-size: 24px; }
+.k-center { text-align: center; }
+
+@media (max-width: 640px) {
+  .k-columns { grid-template-columns: 1fr; }
+  .k-welcome h1, .k-hello h1 { font-size: 24px; }
+  .k-input { font-size: 19px; padding: 15px 16px; }
+}
