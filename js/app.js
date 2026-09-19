@@ -392,17 +392,20 @@ function openItemModal(itemId, prefillISBN, prefillTitle, stickyGenre) {
       ${field('ISBN', 'isbn', d.isbn, { placeholder: 'Scan or type the ISBN' })}
       <button type="button" class="btn" id="do-lookup">Look up</button>
     </div>
-    <p class="hint" id="lookup-status">Looking up an ISBN fills in the title, author and cover automatically. Needs internet; everything can also be typed by hand.</p>
+    <p class="hint" id="lookup-status">${item ? 'Looking up an ISBN fills in any empty details.'
+      : 'Scan the ISBN, then the barcode label, then pick a genre and press Enter. The details fill in while you scan.'}</p>
+    <div class="grid-2 scan-fields">
+      ${field('Barcode', 'barcode', d.barcode, { placeholder: 'Scan the label, or leave blank for ' + (S().barcodePrefix || 'CL') + '-####' })}
+      <div class="field">
+        <label><span class="field-label">Genre</span><select name="genre">${genreOptionsHTML(d.genre)}</select></label>
+        <p class="genre-hints" id="genre-hints" hidden></p>
+      </div>
+    </div>
     <div class="grid-2">
       ${field('Title *', 'title', d.title)}
       ${field('Author', 'author', d.author)}
       ${field('Publisher', 'publisher', d.publisher)}
       ${field('Year', 'year', d.year)}
-      ${field('Barcode', 'barcode', d.barcode, { placeholder: 'Blank = generate ' + (S().barcodePrefix || 'CL') + '-0000' })}
-      <div class="field">
-        <label><span class="field-label">Genre</span><select name="genre">${genreOptionsHTML(d.genre)}</select></label>
-        <p class="genre-hints" id="genre-hints" hidden></p>
-      </div>
       ${field('Tags', 'tags', (d.tags || []).join(', '), { placeholder: 'comma separated' })}
       ${field('Cover image URL', 'cover', d.cover)}
     </div>
@@ -440,21 +443,35 @@ function openItemModal(itemId, prefillISBN, prefillTitle, stickyGenre) {
       genreSel.value = b.dataset.genre;
       prevGenre = genreSel.value;
       showGenreHints([]);
+      genreSel.focus(); // Enter there saves, same as picking from the menu
     });
     genreSel.addEventListener('change', () => { if (genreSel.value) showGenreHints([]); });
 
     async function runLookup() {
-      const raw = get('isbn').value.trim();
-      if (!looksLikeISBN(raw)) { status.textContent = 'That is not a 10- or 13-digit ISBN.'; return; }
+      const isbnInput = get('isbn');
+      const raw = isbnInput.value.trim();
+      if (!raw && !item) {
+        status.textContent = 'No ISBN — type the title and author below.';
+        get('barcode').focus();
+        return;
+      }
+      if (!looksLikeISBN(raw)) {
+        status.textContent = 'That is not a 10- or 13-digit ISBN — scan it again.';
+        isbnInput.focus();
+        isbnInput.select();
+        return;
+      }
+      // Hand the cursor to the barcode right away: if it waited for the lookup,
+      // a label scanned in the meantime would land in (and overwrite) the ISBN.
+      if (!item) get('barcode').focus();
       status.textContent = 'Searching Open Library…';
       try {
         const data = await lookupISBN(raw);
-        if (!data) { status.textContent = 'No record found for that ISBN — type the details in by hand.'; return; }
+        if (!data) { status.textContent = 'No record found for that ISBN — type the title and author below.'; return; }
         ['title', 'author', 'publisher', 'year', 'cover'].forEach(k => { if (data[k] && !get(k).value.trim()) get(k).value = data[k]; });
         if (data.tags && data.tags.length && !get('tags').value.trim()) get('tags').value = data.tags.join(', ');
         status.textContent = 'Found in ' + data.source + '. Check it, then save.';
         showGenreHints(genreSel.value ? [] : suggestGenres(data.subjects, S().genres));
-        get('title').focus();
       } catch (e) {
         status.textContent = e.message === 'offline'
           ? 'No internet connection — you can still type the details in.'
@@ -487,12 +504,30 @@ function openItemModal(itemId, prefillISBN, prefillTitle, stickyGenre) {
     body.querySelector('#save-item').addEventListener('click', () => save(false));
     const againBtn = body.querySelector('#save-item-again');
     if (againBtn) againBtn.addEventListener('click', () => save(true));
+
+    get('barcode').addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const input = e.target;
+      const clash = findItemByCode(input.value);
+      // Same rule addItem/updateItem apply on save, caught now so the label can be rescanned.
+      if (input.value.trim() && clash && (!item || clash.id !== item.id)) {
+        toast('Barcode ' + input.value.trim() + ' is already on "' + clash.title + '". Scan a different label.', 'error');
+        input.select();
+        return;
+      }
+      genreSel.focus();
+    });
+    genreSel.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); save(false); }
+    });
     body.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.name !== 'isbn') { e.preventDefault(); save(false); }
+      if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.name !== 'isbn' && e.target.name !== 'barcode') { e.preventDefault(); save(false); }
     });
 
-    if (prefillISBN && looksLikeISBN(prefillISBN)) runLookup();
-    else (get('title').value ? get('author') : get('title')).focus();
+    if (item) get('title').focus();
+    else if (prefillISBN && looksLikeISBN(prefillISBN)) { get('isbn').focus(); runLookup(); }
+    else get('isbn').focus();
   });
 }
 

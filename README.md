@@ -74,6 +74,21 @@ The intended rhythm at the desk, with a scanner and no mouse:
 | `/` | Jumps back to the scan box from anywhere |
 | `Esc` | Closes a dialog |
 
+### Adding books with a scanner
+
+**Add a book** opens with the cursor in ISBN, and each scan moves you on:
+
+1. **Scan the ISBN** (the barcode on the back cover). The cursor jumps to Barcode straight
+   away, and the title, author and cover fill in while you keep going.
+2. **Scan your library label.** No label? Press Enter on the empty field and one is
+   generated (`CL-0010`, …). A label that's already on another book is caught right there,
+   so you can rescan.
+3. **Pick a genre** — click a "Maybe:" suggestion or choose from the menu — and **press
+   Enter** to save.
+
+For a stack of books, use **Add & add another**: the next dialog opens ready for the next
+ISBN, with the same genre already chosen.
+
 ## Settings worth setting
 
 | Setting | Default | Notes |

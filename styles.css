@@ -497,6 +497,7 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .grid-2.wide { gap: 28px; }
 .lookup-row { display: flex; gap: 8px; align-items: flex-end; }
 .lookup-row .field { flex: 1; }
+.scan-fields { margin: 14px 0 18px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
 
 .check { display: flex; gap: 8px; align-items: flex-start; margin-top: 14px; font-size: 14px; }
 .check input { margin-top: 3px; }
