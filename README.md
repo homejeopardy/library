@@ -152,8 +152,8 @@ The intended rhythm at the desk, with a scanner and no mouse:
 3. **Pick a genre** — click a "Maybe:" suggestion or choose from the menu — and **press
    Enter** to save.
 
-For a stack of books, use **Add & add another**: the next dialog opens ready for the next
-ISBN, with the same genre already chosen.
+For a stack of books, use **Add & add another**: the next dialog opens blank, ready for the
+next ISBN, and suggests a genre for that book.
 
 ## Settings worth setting
 

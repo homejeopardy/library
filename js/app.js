@@ -499,10 +499,9 @@ function genreOptionsHTML(current) {
     `<option value="__new__">＋ New genre…</option>`;
 }
 
-/* stickyGenre: "Add & add another" keeps the genre, since books usually arrive in stacks of one kind. */
-function openItemModal(itemId, prefillISBN, prefillTitle, stickyGenre) {
+function openItemModal(itemId, prefillISBN, prefillTitle) {
   const item = itemId ? itemById(itemId) : null;
-  const d = item || { barcode: '', isbn: prefillISBN || '', title: prefillTitle || '', author: '', publisher: '', year: '', cover: '', genre: stickyGenre || '', tags: [], notes: '' };
+  const d = item || { barcode: '', isbn: prefillISBN || '', title: prefillTitle || '', author: '', publisher: '', year: '', cover: '', genre: '', tags: [], notes: '' };
 
   openModal(item ? 'Edit book' : 'Add a book', `
     <div class="lookup-row">
@@ -610,7 +609,7 @@ function openItemModal(itemId, prefillISBN, prefillTitle, stickyGenre) {
       if (!res.ok) { toast(res.error, 'error'); return; }
       toast(item ? 'Saved.' : 'Added "' + res.item.title + '" (' + res.item.barcode + ').', 'ok');
       if (again) {
-        openItemModal(null, '', '', fields.genre);
+        openItemModal(null); // starts blank, so the next book gets its own genre suggestions
         return;
       }
       closeModal();
