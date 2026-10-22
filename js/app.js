@@ -1417,20 +1417,37 @@ function printShelfList() {
 }
 
 /* ----------------------------- spine labels -----------------------------
-   0.66in wide, 1in tall: the genre drawing, its name in small type, the
-   call letters big enough to read on a shelf, and the barcode number for
-   the desk. Printed butt-joined on a full label sheet so one cut with a
-   paper trimmer serves both neighbours.
+   0.66in wide, 1.4in tall: the genre drawing, its name in small type, the
+   call letters big enough to read on a shelf, then the barcode number and
+   a scannable Code 39 of it. The barcode runs up the long edge — across
+   the 0.66in width its bars would be about 4 mil, finer than a classroom
+   printer can hold or a cheap scanner can read.
    ----------------------------------------------------------------------- */
 
 const LABELS_PER_ROW = 11;
+const LABEL_ROWS = 7;
+const BARCODE_LENGTH_IN = 1.3;       // printed length of the symbol
+const MIN_BAR_MIL = 6.5;             // below this, scanners start to struggle
+
+/* Printed width of one narrow bar, in thousandths of an inch. */
+function barcodeBarMil(code) {
+  return BARCODE_LENGTH_IN / code39Units(code) * 2 * 1000;
+}
+
+function barcodeFits(code) {
+  return code39Supports(code) && barcodeBarMil(code) >= MIN_BAR_MIL;
+}
 
 function labelHTML(item) {
+  const code = String(item.barcode || '');
   return `<div class="spine-label">
-    <span class="sl-art">${genreArt(item.genre, '0.26in')}</span>
-    <span class="sl-genre">${esc(item.genre || '')}</span>
-    <span class="sl-code">${esc(callLetters(item.title))}</span>
-    <span class="sl-num">${esc(item.barcode)}</span>
+    <span class="sl-main">
+      <span class="sl-art">${genreArt(item.genre, '0.24in')}</span>
+      <span class="sl-genre">${esc(item.genre || '')}</span>
+      <span class="sl-code">${esc(callLetters(item.title))}</span>
+      <span class="sl-num">${esc(code)}</span>
+    </span>
+    <span class="sl-barcode">${barcodeFits(code) ? code39SVG(code) : ''}</span>
   </div>`;
 }
 
@@ -1468,24 +1485,30 @@ function openLabelsModal() {
     const scope = scopes.find(x => x[0] === scopeKey) || scopes[0];
     const items = scope[2];
     const missing = items.filter(i => !i.genre).length;
+    const unscannable = items.filter(i => !barcodeFits(String(i.barcode || '')));
     openModal('Print spine labels', `
       <label class="field"><span>Which books</span>
         <select name="scope">${scopes.map(x => `<option value="${x[0]}" ${x[0] === scopeKey ? 'selected' : ''}>${esc(x[1])}</option>`).join('')}</select>
       </label>
       <label class="field"><span>Skip this many spaces on the sheet</span>
-        <input name="skip" type="number" min="0" max="109" value="${skip}">
+        <input name="skip" type="number" min="0" max="${LABELS_PER_ROW * LABEL_ROWS - 1}" value="${skip}">
       </label>
       <p class="hint">Starts at the top-left of the sheet. Skip spaces to carry on down a part-used sheet.</p>
       ${summary ? `<p class="note">${esc(summary)}</p>` : ''}
       ${missing ? `<p class="note" id="guess-note">${plural(missing, 'book has', 'books have')} no genre, so ${missing === 1 ? 'its label' : 'their labels'} would print without a picture.
         <button type="button" class="btn" id="guess-genres">Guess from the internet</button></p>` : ''}
+      ${unscannable.length ? `<p class="note">${plural(unscannable.length, 'book has', 'books have')} a barcode too long to print as a scannable code this small
+        (${esc(unscannable.slice(0, 3).map(i => i.barcode).join(', '))}${unscannable.length > 3 ? '…' : ''}).
+        ${unscannable.length === 1 ? 'Its label shows' : 'Their labels show'} the number only.</p>` : ''}
       <h3 class="section-title">How they will print — actual size</h3>
       <div class="label-preview">${items.slice(0, 5).map(labelHTML).join('') || '<p class="muted">No books to label.</p>'}</div>
       <div class="actions">
         <button type="button" class="btn btn-primary" id="do-print" ${items.length ? '' : 'disabled'}>Print ${plural(items.length, 'label')}</button>
         <button type="button" class="btn btn-quiet" data-close>Cancel</button>
       </div>
-      <p class="hint">Print onto full-sheet label paper, then cut along the guide lines. ${LABELS_PER_ROW} across, 10 down — ${LABELS_PER_ROW * 10} to a sheet.</p>
+      <p class="hint">Print onto full-sheet label paper, then cut along the guide lines.
+        ${LABELS_PER_ROW} across, ${LABEL_ROWS} down — ${LABELS_PER_ROW * LABEL_ROWS} to a sheet.
+        Set your printer to actual size, not “fit to page”, or the barcodes will not scan.</p>
     `, body => {
       const scopeSel = body.querySelector('[name="scope"]');
       const skipInput = body.querySelector('[name="skip"]');
