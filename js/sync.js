@@ -28,7 +28,7 @@ const Sync = (function () {
   const BASE_KEY = 'classroom-library-synced';
   const FILES = {
     catalog: { path: 'catalog.json', keys: ['items', 'settings'] },
-    circulation: { path: 'circulation.json', keys: ['patrons', 'loans', 'holds'] }
+    circulation: { path: 'circulation.json', keys: ['patrons', 'loans', 'holds', 'reviews'] }
   };
 
   let base = readBase();          // { catalog: {sha, etag, data}, circulation: {...} }

@@ -40,8 +40,12 @@ const GENRE_SET_2_MAP = {
 };
 
 function blankDB() {
-  return { version: 1, items: [], patrons: [], loans: [], holds: [], activity: [], settings: Object.assign({}, DEFAULT_SETTINGS) };
+  return { version: 1, items: [], patrons: [], loans: [], holds: [], reviews: [], activity: [], settings: Object.assign({}, DEFAULT_SETTINGS) };
 }
+
+/* A book is on the shelf unless something has happened to it. */
+const ITEM_STATUSES = { lost: 'Lost', damaged: 'Damaged' };
+const statusLabel = key => ITEM_STATUSES[key] || '';
 
 let DB = loadDB();
 
@@ -68,7 +72,7 @@ function migrate(parsed) {
   const db = Object.assign(blankDB(), parsed);
   db.settings = Object.assign({}, DEFAULT_SETTINGS, parsed.settings || {});
   if (!Array.isArray(db.settings.genres)) db.settings.genres = DEFAULT_SETTINGS.genres.slice();
-  ['items', 'patrons', 'loans', 'holds', 'activity'].forEach(k => { if (!Array.isArray(db[k])) db[k] = []; });
+  ['items', 'patrons', 'loans', 'holds', 'reviews', 'activity'].forEach(k => { if (!Array.isArray(db[k])) db[k] = []; });
 
   // The free-text "shelf / location" field became a genre. A location that names a genre
   // becomes that genre; anything else is kept in the book's notes rather than lost.
@@ -263,6 +267,7 @@ function deletePatron(id) {
   DB.patrons = DB.patrons.filter(p => p.id !== id);
   DB.loans = DB.loans.filter(l => l.patronId !== id);
   DB.holds = DB.holds.filter(h => h.patronId !== id);
+  DB.reviews = DB.reviews.filter(r => r.patronId !== id);
   saveDB();
   return { ok: true };
 }
@@ -274,6 +279,15 @@ function mergePatrons(fromId, intoId) {
   if (!from || !into) return { ok: false, error: 'Student not found.' };
   DB.loans.forEach(l => { if (l.patronId === fromId) l.patronId = intoId; });
   DB.holds.forEach(h => { if (h.patronId === fromId) h.patronId = intoId; });
+  // One rating per book survives the merge: whichever was given later.
+  DB.reviews.forEach(r => {
+    if (r.patronId !== fromId) return;
+    const kept = reviewBy(r.itemId, intoId);
+    if (!kept) { r.patronId = intoId; return; }
+    if (new Date(r.at) > new Date(kept.at)) kept.stars = r.stars;
+    r.patronId = null;
+  });
+  DB.reviews = DB.reviews.filter(r => r.patronId);
   if (!into.barcode && from.barcode) into.barcode = from.barcode;
   if (!into.group && from.group) into.group = from.group;
   if (from.notes) into.notes = (into.notes ? into.notes + '\n' : '') + from.notes;
@@ -341,6 +355,7 @@ function deleteItem(id) {
   DB.items = DB.items.filter(i => i.id !== id);
   DB.loans = DB.loans.filter(l => l.itemId !== id);
   DB.holds = DB.holds.filter(h => h.itemId !== id);
+  DB.reviews = DB.reviews.filter(r => r.itemId !== id);
   saveDB();
   return { ok: true };
 }
@@ -350,6 +365,10 @@ function checkout(itemId, patronId) {
   const item = itemById(itemId), patron = patronById(patronId);
   if (!item) return { ok: false, error: 'Item not found.' };
   if (!patron) return { ok: false, error: 'Student not found.' };
+
+  if (item.status) {
+    return { ok: false, error: '"' + item.title + '" is marked ' + statusLabel(item.status).toLowerCase() + '.', soft: true };
+  }
 
   const open = activeLoanForItem(itemId);
   if (open) {
@@ -442,6 +461,7 @@ const nextHoldForItem = itemId => holdsForItem(itemId)[0] || null;
 function placeHold(itemId, patronId) {
   const item = itemById(itemId), patron = patronById(patronId);
   if (!item || !patron) return { ok: false, error: 'Item or student not found.' };
+  if (item.status) return { ok: false, error: '"' + item.title + '" is marked ' + statusLabel(item.status).toLowerCase() + ' — no point waiting for it.' };
   const loan = activeLoanForItem(itemId);
   if (loan && loan.patronId === patronId) return { ok: false, error: patron.name + ' already has that book.' };
   if (holdsForItem(itemId).some(h => h.patronId === patronId)) return { ok: false, error: patron.name + ' is already in line for that book.' };
@@ -466,11 +486,62 @@ function readyHolds() {
   return openHolds()
     .sort((a, b) => new Date(a.placedAt) - new Date(b.placedAt))
     .filter(h => {
+      const item = itemById(h.itemId);
+      if (!item || item.status) return false;   // lost or damaged: not coming off the shelf
       if (activeLoanForItem(h.itemId)) return false;
       if (seen[h.itemId]) return false;
       seen[h.itemId] = true;
       return true;
     });
+}
+
+/* --- lost and damaged --- */
+
+/* Marking a book that is checked out closes its loan, so the student
+   stops owing a book nobody expects back; the loan keeps the reason. */
+function setItemStatus(itemId, status, note) {
+  const item = itemById(itemId);
+  if (!item) return { ok: false, error: 'Item not found.' };
+  if (status && !ITEM_STATUSES[status]) return { ok: false, error: 'Unknown status.' };
+  const loan = status ? activeLoanForItem(itemId) : null;
+  const holder = loan ? patronById(loan.patronId) : null;
+  if (loan) {
+    loan.returnedAt = nowISO();
+    loan.outcome = status;
+  }
+  item.status = status || '';
+  item.statusAt = status ? nowISO() : '';
+  item.statusNote = status ? String(note || '').trim() : '';
+  if (status && holder) item.statusWith = holder.name;
+  if (!status) delete item.statusWith;
+  saveDB();
+  return { ok: true, item: item, closedLoan: !!loan, holder: holder };
+}
+
+const troubledItems = () => DB.items.filter(i => i.status).sort((a, b) => new Date(b.statusAt || 0) - new Date(a.statusAt || 0));
+
+/* --- what students thought --- */
+
+const reviewsForItem = itemId => DB.reviews.filter(r => r.itemId === itemId);
+
+function itemRating(itemId) {
+  const list = reviewsForItem(itemId);
+  if (!list.length) return null;
+  return { avg: list.reduce((sum, r) => sum + r.stars, 0) / list.length, count: list.length };
+}
+
+const reviewBy = (itemId, patronId) => DB.reviews.find(r => r.itemId === itemId && r.patronId === patronId) || null;
+
+/* One rating per student per book; rating again replaces the old one. */
+function rateItem(itemId, patronId, stars) {
+  const n = Math.round(Number(stars));
+  if (!(n >= 1 && n <= 5)) return { ok: false, error: 'Pick one to five stars.' };
+  if (!itemById(itemId) || !patronById(patronId)) return { ok: false, error: 'Item or student not found.' };
+  let review = reviewBy(itemId, patronId);
+  if (review) { review.stars = n; review.at = nowISO(); }
+  else { review = { id: uid('rev'), itemId: itemId, patronId: patronId, stars: n, at: nowISO() }; DB.reviews.push(review); }
+  saveDB();
+  return { ok: true, review: review };
 }
 
 /* --- genres --- */
@@ -531,6 +602,7 @@ function importJSON(text, mode) {
   items.forEach(i => { if (i.genre) addGenre(i.genre, true); });
   (incoming.loans || []).forEach(l => { if (!has(DB.loans, l.id) && itemById(l.itemId) && patronById(l.patronId)) { DB.loans.push(l); added.loans++; } });
   (incoming.holds || []).forEach(h => { if (!has(DB.holds, h.id) && itemById(h.itemId) && patronById(h.patronId)) { DB.holds.push(h); added.holds++; } });
+  (incoming.reviews || []).forEach(r => { if (!has(DB.reviews, r.id) && itemById(r.itemId) && patronById(r.patronId) && !reviewBy(r.itemId, r.patronId)) DB.reviews.push(r); });
   saveDB();
   return { ok: true, added: added };
 }

@@ -38,6 +38,10 @@ library, kept in a private GitHub repository.
   when the returned book is spoken for.
 - **Reports** — what's out, what's overdue, most borrowed, busiest readers, never borrowed.
   Printable overdue notices and a printable shelf list.
+- **Lost and damaged** — a book can be set aside without deleting it. It keeps its history,
+  stops being checked out, and shows in Reports with who had it last.
+- **Star ratings** — students rate a book out of five as they return it at the station.
+  Averages show in the catalog, in student search, and in Reports.
 - **Undo** — the last few desk actions can be reversed with one click.
 - **Exports** — catalog and loan history as CSV, plus a full JSON backup.
 
@@ -189,6 +193,26 @@ python3 dev/build_genre_art.py
 ```
 
 Open `dev/genre-icons.html` to see every icon at icon, tag and real label size.
+
+## Lost and damaged books
+
+From the circulation desk (**Lost or damaged…**), from a book's Edit dialog, or from the
+Reports list. Marking a book that is **currently checked out** closes that loan, so the
+student stops owing a book nobody expects back — the loan keeps the reason, and the book
+remembers who had it last.
+
+A marked book stays in the catalog with all its history. It will not be checked out (the
+desk can still override), will not fill a hold, and the student station tells anyone who
+scans it to give it to you. **Back on the shelf** undoes all of that.
+
+## Star ratings
+
+When a student returns a book at the station, it asks "How was it?" and they tap one to
+five stars. One rating per student per book; tapping again replaces it. Ratings are never
+shown with a name attached — students only ever see the average.
+
+They appear in the catalog under each title, in the student station's search results (so
+students pick books other students liked), and in **Reports → What students thought**.
 
 ## Settings worth setting
 

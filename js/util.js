@@ -136,3 +136,10 @@ function callLetters(title) {
   const kept = words.filter(w => !FILING_SKIP.includes(w.toLowerCase()));
   return (kept.join('') || words.join('')).slice(0, 3).toUpperCase();
 }
+
+/* Five stars, filled to the nearest whole one. */
+function starsHTML(avg) {
+  const full = Math.max(0, Math.min(5, Math.round(avg)));
+  return '<span class="stars" role="img" aria-label="' + avg.toFixed(1) + ' out of 5 stars">' +
+    '\u2605\u2605\u2605\u2605\u2605'.slice(0, full) + '\u2606\u2606\u2606\u2606\u2606'.slice(0, 5 - full) + '</span>';
+}

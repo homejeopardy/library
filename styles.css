@@ -585,6 +585,8 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .toast.out { opacity: 0; transition: opacity .3s; }
 @keyframes rise { from { transform: translateY(8px); opacity: 0; } }
 
+.stars { color: var(--warn); letter-spacing: .5px; white-space: nowrap; }
+
 /* ---------------- spine labels ---------------- */
 
 /* One label. Sized in inches so the screen preview is the printed size. */

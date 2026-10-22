@@ -229,6 +229,23 @@ function circPanelHTML() {
   const loan = activeLoanForItem(item.id);
   const hold = nextHoldForItem(item.id);
 
+  if (item.status) {
+    return `
+    <div class="card card-danger">
+      ${itemHeadHTML(item)}
+      <div class="status-row">
+        <span class="badge badge-danger">${esc(statusLabel(item.status))}</span>
+        <span class="muted">since ${esc(fmtDate(item.statusAt))}${item.statusWith ? ' &middot; last with ' + esc(item.statusWith) : ''}</span>
+      </div>
+      ${item.statusNote ? `<p class="note">${esc(item.statusNote)}</p>` : ''}
+      <div class="actions">
+        <button class="btn btn-primary" data-act="unmark" data-id="${item.id}" id="primary-action">Back on the shelf</button>
+        <button class="btn btn-quiet" data-act="edit-item" data-id="${item.id}">Edit</button>
+        <button class="btn btn-quiet" data-act="clear-desk">Cancel</button>
+      </div>
+    </div>`;
+  }
+
   if (loan) {
     const who = patronById(loan.patronId);
     const late = isOverdue(loan);
@@ -246,6 +263,7 @@ function circPanelHTML() {
         <button class="btn btn-primary" data-act="checkin" data-id="${item.id}" id="primary-action">Check in</button>
         <button class="btn" data-act="renew" data-id="${loan.id}">Renew</button>
         <button class="btn btn-quiet" data-act="hold-for" data-id="${item.id}">Place hold</button>
+        <button class="btn btn-quiet" data-act="mark-trouble" data-id="${item.id}">Lost or damaged…</button>
         <button class="btn btn-quiet" data-act="clear-desk">Cancel</button>
       </div>
     </div>`;
@@ -270,6 +288,7 @@ function circPanelHTML() {
     <div class="actions">
       <button class="btn btn-primary" data-act="do-checkout" id="primary-action">Check out</button>
       <button class="btn btn-quiet" data-act="hold-for" data-id="${item.id}">Place hold</button>
+      <button class="btn btn-quiet" data-act="mark-trouble" data-id="${item.id}">Lost or damaged…</button>
       <button class="btn btn-quiet" data-act="clear-desk">Cancel</button>
     </div>
     <p class="hint">${S().autoCreatePatrons ? 'A student who has never borrowed before is added automatically.' : 'New students must be added on the Students tab first.'}</p>
@@ -516,6 +535,11 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
         <label><span class="field-label">Genre</span><select name="genre">${genreOptionsHTML(d.genre)}</select></label>
         <p class="genre-hints" id="genre-hints" hidden></p>
       </div>
+      ${item ? `<label class="field"><span>Condition</span>
+        <select name="status">
+          <option value="">On the shelf</option>
+          ${Object.keys(ITEM_STATUSES).map(k => `<option value="${k}" ${item.status === k ? 'selected' : ''}>${esc(ITEM_STATUSES[k])}</option>`).join('')}
+        </select></label>` : ''}
     </div>
     <div class="grid-2">
       ${field('Title *', 'title', d.title)}
@@ -526,6 +550,7 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
       ${field('Cover image URL', 'cover', d.cover)}
     </div>
     <label class="field"><span>Notes</span><textarea name="notes" rows="2">${esc(d.notes)}</textarea></label>
+    ${item && itemRating(item.id) ? `<p class="hint">Students rated this ${starsHTML(itemRating(item.id).avg)} ${itemRating(item.id).avg.toFixed(1)} from ${plural(itemRating(item.id).count, 'rating')}.</p>` : ''}
     <div class="actions">
       <button type="button" class="btn btn-primary" id="save-item">${item ? 'Save changes' : 'Add to collection'}</button>
       ${item ? '' : '<button type="button" class="btn" id="save-item-again">Add &amp; add another</button>'}
@@ -607,6 +632,8 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
       };
       const res = item ? updateItem(item.id, fields) : addItem(fields);
       if (!res.ok) { toast(res.error, 'error'); return; }
+      const statusSel = get('status');
+      if (statusSel && statusSel.value !== (item.status || '')) setItemStatus(item.id, statusSel.value, item.statusNote);
       toast(item ? 'Saved.' : 'Added "' + res.item.title + '" (' + res.item.barcode + ').', 'ok');
       if (again) {
         openItemModal(null); // starts blank, so the next book gets its own genre suggestions
@@ -743,6 +770,44 @@ function openMergeModal(fromId) {
   });
 }
 
+/* --- lost or damaged --- */
+function openTroubleModal(itemId) {
+  const item = itemById(itemId);
+  if (!item) return;
+  const loan = activeLoanForItem(itemId);
+  const holder = loan ? patronById(loan.patronId) : null;
+  openModal('Lost or damaged', `
+    <p><strong>${esc(item.title)}</strong></p>
+    ${holder ? `<p class="note">${esc(holder.name)} has this book out. Marking it will close their loan, so it stops counting as overdue — their borrowing history keeps the reason.</p>` : ''}
+    <label class="field"><span>What happened</span>
+      <select name="status">
+        ${Object.keys(ITEM_STATUSES).map(k => `<option value="${k}" ${item.status === k ? 'selected' : ''}>${esc(ITEM_STATUSES[k])}</option>`).join('')}
+      </select>
+    </label>
+    <label class="field"><span>Note (optional)</span>
+      <input name="note" value="${esc(item.statusNote || '')}" placeholder="e.g. water damage, cover missing" autocomplete="off">
+    </label>
+    <p class="hint">The book stays in the catalog with its history. It will not be checked out or fill holds until you put it back on the shelf.</p>
+    <div class="actions">
+      <button type="button" class="btn btn-primary" id="do-mark">Mark it</button>
+      ${item.status ? '<button type="button" class="btn" id="do-clear">Back on the shelf</button>' : ''}
+      <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+    </div>
+  `, body => {
+    body.querySelector('#do-mark').addEventListener('click', () => {
+      const status = body.querySelector('[name="status"]').value;
+      const res = setItemStatus(itemId, status, body.querySelector('[name="note"]').value);
+      if (!res.ok) { toast(res.error, 'error'); return; }
+      toast('"' + item.title + '" marked ' + statusLabel(status).toLowerCase() +
+        (res.closedLoan ? ' — ' + (res.holder ? res.holder.name : 'the borrower') + "'s loan was closed." : '.'), 'ok');
+      closeModal();
+      if (route === 'circulation') resetCirc(); else render();
+    });
+    const clear = body.querySelector('#do-clear');
+    if (clear) clear.addEventListener('click', () => { ACTIONS['unmark'](itemId); closeModal(); });
+  });
+}
+
 /* --- place a hold --- */
 function openHoldModal(itemId) {
   const item = itemById(itemId);
@@ -786,8 +851,9 @@ function openHoldModal(itemId) {
 function currentCatalogItems() {
   let items = searchItems(ui.catalogQuery);
   if (ui.catalogFilter === 'out') items = items.filter(i => activeLoanForItem(i.id));
-  if (ui.catalogFilter === 'in') items = items.filter(i => !activeLoanForItem(i.id));
+  if (ui.catalogFilter === 'in') items = items.filter(i => !activeLoanForItem(i.id) && !i.status);
   if (ui.catalogFilter === 'overdue') items = items.filter(i => isOverdue(activeLoanForItem(i.id)));
+  if (ui.catalogFilter === 'trouble') items = items.filter(i => i.status);
   if (ui.catalogGenre === '__none__') items = items.filter(i => !i.genre);
   else if (ui.catalogGenre) items = items.filter(i => normName(i.genre) === normName(ui.catalogGenre));
   return items;
@@ -809,7 +875,7 @@ VIEWS.catalog = function () {
         ${untagged ? `<option value="__none__" ${ui.catalogGenre === '__none__' ? 'selected' : ''}>No genre yet (${untagged})</option>` : ''}
       </select>
       <div class="chips" role="group" aria-label="Filter">
-        ${[['all', 'All'], ['in', 'On the shelf'], ['out', 'Checked out'], ['overdue', 'Overdue']].map(([k, label]) =>
+        ${[['all', 'All'], ['in', 'On the shelf'], ['out', 'Checked out'], ['overdue', 'Overdue'], ['trouble', 'Lost or damaged']].map(([k, label]) =>
           `<button class="chip ${ui.catalogFilter === k ? 'active' : ''}" data-act="cat-filter" data-id="${k}">${label}</button>`).join('')}
       </div>
       <span class="spacer"></span>
@@ -830,13 +896,17 @@ VIEWS.catalog = function () {
             <td>${coverHTML(i, 'cover-xs')}</td>
             <td><button class="link strong" data-act="desk-item" data-id="${i.id}">${esc(i.title)}</button>
                 ${waiting ? `<span class="pill">${waiting} waiting</span>` : ''}
-                <div class="mono small muted">${esc(i.barcode)}</div></td>
+                <div class="mono small muted">${esc(i.barcode)}</div>
+                ${ratingLineHTML(i)}</td>
             <td>${esc(i.author || '—')}</td>
             <td>${i.genre ? `<button class="genre-tag" data-act="cat-genre" data-id="${esc(i.genre)}">${esc(i.genre)}</button>` : '<span class="muted">—</span>'}</td>
-            <td>${loan
-              ? `<span class="badge ${late ? 'badge-danger' : 'badge-warn'}">${late ? 'Overdue' : 'Out'}</span>
-                 <span class="muted small">${esc(who ? who.name : '?')} &middot; ${esc(fmtDate(loan.dueAt))}</span>`
-              : `<span class="badge badge-ok">On the shelf</span>`}</td>
+            <td>${i.status
+              ? `<span class="badge badge-danger">${esc(statusLabel(i.status))}</span>
+                 ${i.statusWith ? `<span class="muted small">last with ${esc(i.statusWith)}</span>` : ''}`
+              : loan
+                ? `<span class="badge ${late ? 'badge-danger' : 'badge-warn'}">${late ? 'Overdue' : 'Out'}</span>
+                   <span class="muted small">${esc(who ? who.name : '?')} &middot; ${esc(fmtDate(loan.dueAt))}</span>`
+                : `<span class="badge badge-ok">On the shelf</span>`}</td>
             <td class="row-actions">
               <button class="link" data-act="edit-item" data-id="${i.id}">Edit</button>
               <button class="link" data-act="hold-for" data-id="${i.id}">Hold</button>
@@ -856,6 +926,12 @@ AFTER.catalog = function () {
   q.focus();
   q.setSelectionRange(q.value.length, q.value.length);
 };
+
+function ratingLineHTML(item) {
+  const r = itemRating(item.id);
+  if (!r) return '';
+  return `<div class="small muted">${starsHTML(r.avg)} ${r.avg.toFixed(1)} <span class="muted">(${plural(r.count, 'rating')})</span></div>`;
+}
 
 function emptyState(message, cta) {
   return `<div class="empty">
@@ -962,6 +1038,7 @@ VIEWS.reports = function () {
       ${tile(DB.patrons.length, 'students')}
       ${tile(recentCheckouts, 'checkouts, 30 days')}
       ${tile(openHolds().length, 'open holds')}
+      ${tile(troubledItems().length, 'lost or damaged', troubledItems().length ? 'danger' : '')}
     </div>
 
     <h2 class="section-title">Overdue <button class="btn btn-quiet" data-act="print-notices" ${over.length ? '' : 'disabled'}>Print notices</button></h2>
@@ -991,6 +1068,22 @@ VIEWS.reports = function () {
       </div>
     </div>
 
+    ${troubledItems().length ? `<h2 class="section-title">Lost and damaged</h2>
+    <table class="table">
+      <thead><tr><th>Book</th><th>What happened</th><th>Since</th><th>Last with</th><th></th></tr></thead>
+      <tbody>${troubledItems().map(i => `<tr>
+        <td><button class="link strong" data-act="desk-item" data-id="${i.id}">${esc(i.title)}</button>
+            <div class="mono small muted">${esc(i.barcode)}</div></td>
+        <td><span class="badge badge-danger">${esc(statusLabel(i.status))}</span>${i.statusNote ? ` <span class="muted small">${esc(i.statusNote)}</span>` : ''}</td>
+        <td class="muted small">${esc(fmtDate(i.statusAt))}</td>
+        <td class="muted small">${esc(i.statusWith || '—')}</td>
+        <td class="row-actions"><button class="link" data-act="unmark" data-id="${i.id}">Back on the shelf</button></td>
+      </tr>`).join('')}</tbody>
+    </table>` : ''}
+
+    <h2 class="section-title">What students thought</h2>
+    ${ratedReportHTML()}
+
     <h2 class="section-title">By genre</h2>
     ${genreReportHTML(counts)}
 
@@ -1005,6 +1098,22 @@ VIEWS.reports = function () {
     </div>
   </section>`;
 };
+
+/* Books students have rated, best first. Two ratings is a low bar, but with
+   one class it is the difference between a shelf favourite and one opinion. */
+function ratedReportHTML() {
+  const rated = DB.items.map(i => ({ item: i, r: itemRating(i.id) })).filter(x => x.r);
+  if (!rated.length) return '<p class="muted">No ratings yet. Students give these at the station when they return a book.</p>';
+  rated.sort((a, b) => b.r.avg - a.r.avg || b.r.count - a.r.count);
+  return `<table class="table">
+    <thead><tr><th>Book</th><th>Rating</th><th>Ratings</th></tr></thead>
+    <tbody>${rated.slice(0, 15).map(x => `<tr>
+      <td><button class="link strong" data-act="desk-item" data-id="${x.item.id}">${esc(x.item.title)}</button></td>
+      <td>${starsHTML(x.r.avg)} <span class="muted">${x.r.avg.toFixed(1)}</span></td>
+      <td class="muted">${x.r.count}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
 
 /* Which kinds of books actually move — useful when deciding what to buy next. */
 function genreReportHTML(counts) {
@@ -1221,6 +1330,14 @@ Object.assign(ACTIONS, {
   'open-patron': id => openPatronModal(id),
 
   'hold-for': itemId => openHoldModal(itemId),
+
+  'mark-trouble': itemId => openTroubleModal(itemId),
+  'unmark': itemId => {
+    const res = setItemStatus(itemId, '');
+    if (!res.ok) { toast(res.error, 'error'); return; }
+    toast('"' + res.item.title + '" is back on the shelf.', 'ok');
+    if (route === 'circulation') resetCirc(); else render();
+  },
   'cancel-hold': id => { const res = cancelHold(id); if (!res.ok) { toast(res.error, 'error'); return; } toast('Hold cancelled.', 'ok'); render(); },
   'fill-hold': id => {
     const h = DB.holds.find(x => x.id === id);

@@ -260,6 +260,7 @@ function offerNewStudent(typed) {
 }
 
 function returnFromWelcome(item) {
+  if (item.status) { showResult('warn', `<strong>${esc(item.title)}</strong> is marked ${esc(statusLabel(item.status).toLowerCase())} — please give it to your teacher.`); return; }
   const loan = activeLoanForItem(item.id);
   if (!loan) { showResult('info', `<strong>${esc(item.title)}</strong> is already checked in — you can put it back on the shelf${shelfHint(item)}.`); return; }
   const res = checkin(item.id);
@@ -275,6 +276,43 @@ function returnedMessage(item, res) {
 
 function shelfHint(item) {
   return item.genre ? ` with the <strong>${esc(item.genre)}</strong> books` : '';
+}
+
+/* The moment a student finishes a book is the only moment they will
+   reliably rate it, so the prompt rides along with the return. */
+function ratePromptHTML(item) {
+  const mine = reviewBy(item.id, K.student.id);
+  return `<div class="k-rate" data-item="${item.id}">
+    <span class="k-rate-ask">${mine ? 'You rated this' : 'How was it?'}</span>
+    <span class="k-stars">${[1, 2, 3, 4, 5].map(n =>
+      `<button type="button" class="k-star ${mine && n <= mine.stars ? 'on' : ''}" data-star="${n}"
+         aria-label="${n} star${n > 1 ? 's' : ''}">\u2605</button>`).join('')}</span>
+  </div>`;
+}
+
+function wireRating(box) {
+  const row = box.querySelector('.k-rate');
+  if (!row) return;
+  const itemId = row.dataset.item;
+  const stars = [...row.querySelectorAll('.k-star')];
+  const paint = upTo => stars.forEach((b, i) => b.classList.toggle('on', i < upTo));
+  const saved = () => { const r = reviewBy(itemId, K.student.id); return r ? r.stars : 0; };
+  // Once a rating is in, hovering must not repaint it: the thank-you message
+  // reflows the row, and a star can slide under a cursor that never moved.
+  let locked = !!saved();
+  stars.forEach(b => {
+    const n = Number(b.dataset.star);
+    b.addEventListener('pointerenter', () => { if (!locked) paint(n); });
+    b.addEventListener('focus', () => { if (!locked) paint(n); });
+    b.addEventListener('click', () => {
+      const res = rateItem(itemId, K.student.id, n);
+      if (!res.ok) { toast(res.error, 'error'); return; }
+      locked = true;
+      paint(n);
+      row.querySelector('.k-rate-ask').textContent = n >= 4 ? 'Thanks — glad you liked it!' : 'Thanks for telling us!';
+    });
+  });
+  row.addEventListener('pointerleave', () => paint(saved()));
 }
 
 /* ------------------------------ signed in ------------------------------ */
@@ -299,13 +337,18 @@ function studentScan(v) {
     showSearch(v);
     return;
   }
+  if (item.status && !activeLoanForItem(item.id)) {
+    showResult('warn', `<strong>${esc(item.title)}</strong> is marked ${esc(statusLabel(item.status).toLowerCase())} right now. Please give it to your teacher.`);
+    return;
+  }
+
   const loan = activeLoanForItem(item.id);
 
   if (loan && loan.patronId === me.id) {
     const res = checkin(item.id);
     if (!res.ok) { showResult('warn', esc(res.error)); return; }
-    K.result = { tone: 'ok', html: returnedMessage(item, res) };
     kRender();
+    showResult('ok', returnedMessage(item, res) + ratePromptHTML(item), '', wireRating);
     return;
   }
 
@@ -360,8 +403,10 @@ function showSearch(q) {
     const loan = activeLoanForItem(it.id);
     const mineOut = loan && loan.patronId === me.id;
     const inLine = holdsForItem(it.id).findIndex(h => h.patronId === me.id) + 1;
+    const rating = itemRating(it.id);
     let status, action = '';
-    if (mineOut) status = 'You have this one';
+    if (it.status) status = 'Not on the shelf right now';
+    else if (mineOut) status = 'You have this one';
     else if (!loan) status = 'On the shelf' + (it.genre ? ` — look in <strong>${esc(it.genre)}</strong>` : '');
     else if (inLine) status = `Checked out · you're number ${inLine} in line`;
     else {
@@ -369,7 +414,9 @@ function showSearch(q) {
       action = `<button class="btn" data-hold-item="${it.id}">Get in line</button>`;
     }
     return `<li>${coverImg(it)}<span class="k-list-text"><strong>${esc(it.title)}</strong>
-      <span class="muted">${esc(it.author || '')}</span><span>${status}</span></span>${action}</li>`;
+      <span class="muted">${esc(it.author || '')}</span>
+      ${rating ? `<span class="k-rating">${starsHTML(rating.avg)} <span class="muted">${rating.avg.toFixed(1)} from ${plural(rating.count, 'reader')}</span></span>` : ''}
+      <span>${status}</span></span>${action}</li>`;
   }).join('');
   showResult('plain', `<ul class="k-list">${rows}</ul>`, '', box => {
     box.querySelectorAll('[data-hold-item]').forEach(b => b.addEventListener('click', () => doHold(itemById(b.dataset.holdItem))));

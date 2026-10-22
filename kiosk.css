@@ -97,3 +97,31 @@ body.kiosk { font-size: 17px; }
   .k-welcome h1, .k-hello h1 { font-size: 24px; }
   .k-input { font-size: 19px; padding: 15px 16px; }
 }
+
+/* ---------------- rating a book you just returned ---------------- */
+
+.k-rate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.k-rate-ask { font-size: 15px; color: var(--text); }
+.k-stars { display: flex; gap: 4px; }
+.k-star {
+  appearance: none;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-size: 30px;
+  line-height: 1;
+  padding: 2px 4px;
+  color: var(--border-strong);
+  transition: color .1s;
+}
+.k-star.on { color: var(--warn); }
+.k-star:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.k-rating { font-size: 13px; }
