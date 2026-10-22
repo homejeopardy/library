@@ -217,7 +217,9 @@ Wardrobe* becomes `LIO`, *Of Mice and Men* becomes `MIC`. Two books can end up w
 same letters; the barcode number underneath tells them apart.
 
 **Printing:** choose the books currently listed in the catalog (so the search box and the
-genre filter decide what you get) or every book. Print onto full-sheet label paper — 11
+genre filter decide what you get) or every book, and the order they come off the sheet —
+**barcode number** (the order you catalogued them, so labels match a stack of books),
+**genre then title** (one bin at a time), **title**, or **author then title**. Print onto full-sheet label paper — 11
 labels across, 10 down, 110 to a sheet — and cut along the hairline guides. Labels sit
 edge to edge, so one pass with a paper trimmer cuts both neighbours. To use the rest of a
 part-cut sheet, set **skip this many spaces**.

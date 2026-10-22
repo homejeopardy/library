@@ -1896,6 +1896,18 @@ function printShelfList() {
 
 const LABELS_PER_ROW = 11;
 
+/* The order labels come off the sheet should match the order the books are
+   stacked when you sit down to stick them on. */
+const LABEL_ORDERS = [
+  ['barcode', 'Barcode number — the order you catalogued them',
+    (a, b) => normCode(a.barcode).localeCompare(normCode(b.barcode), undefined, { numeric: true })],
+  ['genre', 'Genre, then title — one bin at a time',
+    (a, b) => normName(a.genre || '~').localeCompare(normName(b.genre || '~')) || byTitle(a, b)],
+  ['title', 'Title', byTitle],
+  ['author', 'Author, then title',
+    (a, b) => normName(a.author || '~').localeCompare(normName(b.author || '~')) || byTitle(a, b)]
+];
+
 function labelHTML(item) {
   return `<div class="spine-label">
     <span class="sl-art">${genreArt(item.genre, '0.26in')}</span>
@@ -1932,16 +1944,20 @@ function openLabelsModal() {
   const listed = currentCatalogItems();
   const scopes = [
     ['listed', 'The ' + plural(listed.length, 'book') + ' listed in the catalog now', listed],
-    ['all', 'Every book (' + DB.items.length + ')', DB.items.slice().sort(byTitle)]
+    ['all', 'Every book (' + DB.items.length + ')', DB.items.slice()]
   ];
 
-  function draw(scopeKey, skip, summary) {
+  function draw(scopeKey, skip, summary, orderKey) {
     const scope = scopes.find(x => x[0] === scopeKey) || scopes[0];
-    const items = scope[2];
+    const order = LABEL_ORDERS.find(o => o[0] === orderKey) || LABEL_ORDERS[0];
+    const items = scope[2].slice().sort(order[2]);
     const missing = items.filter(i => !i.genre).length;
     openModal('Print spine labels', `
       <label class="field"><span>Which books</span>
         <select name="scope">${scopes.map(x => `<option value="${x[0]}" ${x[0] === scopeKey ? 'selected' : ''}>${esc(x[1])}</option>`).join('')}</select>
+      </label>
+      <label class="field"><span>In what order</span>
+        <select name="order">${LABEL_ORDERS.map(o => `<option value="${o[0]}" ${o[0] === order[0] ? 'selected' : ''}>${esc(o[1])}</option>`).join('')}</select>
       </label>
       <label class="field"><span>Skip this many spaces on the sheet</span>
         <input name="skip" type="number" min="0" max="109" value="${skip}">
@@ -1960,8 +1976,11 @@ function openLabelsModal() {
     `, body => {
       const scopeSel = body.querySelector('[name="scope"]');
       const skipInput = body.querySelector('[name="skip"]');
-      scopeSel.addEventListener('change', () => draw(scopeSel.value, Number(skipInput.value) || 0, summary));
-      skipInput.addEventListener('change', () => draw(scopeSel.value, Math.max(0, Number(skipInput.value) || 0), summary));
+      const orderSel = body.querySelector('[name="order"]');
+      const redraw = () => draw(scopeSel.value, Math.max(0, Number(skipInput.value) || 0), summary, orderSel.value);
+      scopeSel.addEventListener('change', redraw);
+      skipInput.addEventListener('change', redraw);
+      orderSel.addEventListener('change', redraw);
       body.querySelector('#do-print').addEventListener('click', () => {
         closeModal();
         printLabels(items, Math.max(0, Number(skipInput.value) || 0));
@@ -1974,11 +1993,12 @@ function openLabelsModal() {
         draw(scopeSel.value, Math.max(0, Number(skipInput.value) || 0),
           (res.done.length ? 'Filled in ' + plural(res.done.length, 'genre') + ': ' + res.done.join(', ') + '. Worth checking in the catalog.' : 'No genres could be worked out.') +
           (res.offline ? ' The lookup services could not be reached, so the rest were left alone.' : '') +
-          (res.noIsbn ? ' ' + plural(res.noIsbn, 'book has', 'books have') + ' no ISBN to look up — set those by hand.' : ''));
+          (res.noIsbn ? ' ' + plural(res.noIsbn, 'book has', 'books have') + ' no ISBN to look up — set those by hand.' : ''),
+          orderSel.value);
       });
     });
   }
-  draw('listed', 0);
+  draw('listed', 0, '', 'barcode');
 }
 
 /* ============================ SAMPLE DATA ============================ */
