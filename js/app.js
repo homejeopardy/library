@@ -553,7 +553,7 @@ function itemHeadHTML(item) {
       <h2 class="item-title">${esc(item.title)}</h2>
       <p class="item-sub">${esc(item.author || 'Unknown author')}${item.year ? ' &middot; ' + esc(item.year) : ''}</p>
       <p class="item-meta mono">${esc(item.barcode)}${item.isbn ? ' &middot; ISBN ' + esc(item.isbn) : ''}</p>
-      ${item.genre ? `<p class="item-genre"><span class="genre-tag">${esc(item.genre)}</span></p>` : ''}
+      ${item.genre ? `<p class="item-genre">${genreTagHTML(item.genre)}</p>` : ''}
     </div>
   </div>`;
 }
@@ -782,7 +782,8 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
     <div class="grid-2 scan-fields">
       ${field('Barcode', 'barcode', d.barcode, { placeholder: 'Scan the label, or leave blank for ' + (S().barcodePrefix || 'CL') + '-####' })}
       <div class="field">
-        <label><span class="field-label">Genre</span><select name="genre">${genreOptionsHTML(d.genre)}</select></label>
+        <label><span class="field-label">Genre</span>
+          <span class="genre-pick"><select name="genre">${genreOptionsHTML(d.genre)}</select><span class="genre-pick-art" id="genre-art-now">${genreArt(d.genre, 20)}</span></span></label>
         <p class="genre-hints" id="genre-hints" hidden></p>
       </div>
       ${item ? `<label class="field"><span>Needs attention</span>
@@ -828,7 +829,7 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
     function showGenreHints(list) {
       hintBox.hidden = !list.length;
       hintBox.innerHTML = list.length ? 'Maybe: ' + list.map(g =>
-        `<button type="button" class="genre-tag" data-genre="${esc(g)}">${esc(g)}</button>`).join(' ') : '';
+        `<button type="button" class="genre-tag" data-genre="${esc(g)}">${genreArt(g, 13)}${esc(g)}</button>`).join(' ') : '';
     }
     hintBox.addEventListener('click', e => {
       const b = e.target.closest('[data-genre]');
@@ -838,7 +839,11 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
       showGenreHints([]);
       genreSel.focus(); // Enter there saves, same as picking from the menu
     });
-    genreSel.addEventListener('change', () => { if (genreSel.value) showGenreHints([]); });
+    genreSel.addEventListener('change', () => {
+      if (genreSel.value) showGenreHints([]);
+      const art = body.querySelector('#genre-art-now');
+      if (art) art.innerHTML = genreArt(genreSel.value, 20);
+    });
 
     async function runLookup() {
       const isbnInput = get('isbn');
@@ -1159,7 +1164,7 @@ VIEWS.catalog = function () {
                 ${ratingLineHTML(i)}
                 ${i.attention && !i.status ? `<div class="small"><span class="badge badge-warn">Needs attention</span></div>` : ''}</td>
             <td>${esc(i.author || '—')}</td>
-            <td>${i.genre ? `<button class="genre-tag" data-act="cat-genre" data-id="${esc(i.genre)}">${esc(i.genre)}</button>` : '<span class="muted">—</span>'}</td>
+            <td>${i.genre ? `<button class="genre-tag" data-act="cat-genre" data-id="${esc(i.genre)}">${genreArt(i.genre, 13)}${esc(i.genre)}</button>` : '<span class="muted">—</span>'}</td>
             <td>${i.status
               ? `<span class="badge badge-danger">${esc(statusLabel(i.status))}</span>
                  ${i.statusWith ? `<span class="muted small">last with ${esc(i.statusWith)}</span>` : ''}`
@@ -1186,6 +1191,13 @@ AFTER.catalog = function () {
   q.focus();
   q.setSelectionRange(q.value.length, q.value.length);
 };
+
+/* A genre always travels with its drawing, so the picture on a spine label
+   is the same one students see on screen. */
+function genreTagHTML(genre) {
+  if (!genre) return '';
+  return `<span class="genre-tag">${genreArt(genre, 13)}${esc(genre)}</span>`;
+}
 
 function ratingLineHTML(item) {
   const r = itemRating(item.id);
@@ -1406,7 +1418,7 @@ function genreReportHTML(counts) {
     <tbody>${names.map(g => {
       const r = rows[g];
       return `<tr>
-        <td>${g ? `<button class="genre-tag" data-act="report-genre" data-id="${esc(g)}">${esc(g)}</button>` : '<span class="muted">No genre yet</span>'}</td>
+        <td>${g ? `<button class="genre-tag" data-act="report-genre" data-id="${esc(g)}">${genreArt(g, 13)}${esc(g)}</button>` : '<span class="muted">No genre yet</span>'}</td>
         <td>${r.books}</td>
         <td class="muted">${r.out || '—'}</td>
         <td>${r.loans}</td>
@@ -1456,7 +1468,7 @@ VIEWS.settings = function () {
       ${genreList().map(g => {
         const n = booksInGenre(g).length;
         return `<li>
-          <span class="genre-tag">${esc(g)}</span>
+          ${genreTagHTML(g)}
           <span class="muted small">${n ? plural(n, 'book') : 'unused'}</span>
           <span class="row-actions">
             <button class="link" data-act="genre-rename" data-id="${esc(g)}">Rename</button>

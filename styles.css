@@ -463,8 +463,10 @@ td.row-actions .link + .link { margin-left: 12px; }
 /* ---------------- genres ---------------- */
 
 .genre-tag {
-  display: inline-block;
-  padding: 2px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface-2);
@@ -476,6 +478,10 @@ td.row-actions .link + .link { margin-left: 12px; }
 }
 button.genre-tag { cursor: pointer; }
 td .genre-tag { white-space: normal; text-align: left; }
+.genre-tag .genre-art { flex: none; }
+.genre-pick { display: flex; align-items: center; gap: 8px; }
+.genre-pick select { flex: 1; min-width: 0; }
+.genre-pick-art { flex: none; line-height: 0; color: var(--text-muted); }
 button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .item-genre { margin: 8px 0 0; }
 .field .field-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }

@@ -285,7 +285,7 @@ function returnedMessage(item, res) {
 }
 
 function shelfHint(item) {
-  return item.genre ? ` with the <strong>${esc(item.genre)}</strong> books` : '';
+  return item.genre ? ` with the <strong>${esc(item.genre)}</strong> ${genreArt(item.genre, 15)} books` : '';
 }
 
 /* The moment a student finishes a book is the only moment they will
@@ -312,7 +312,7 @@ function alsoLikedHTML(item) {
       <span class="muted">${esc(p.item.author || '')}</span>
       ${p.rating ? `<span class="k-rating">${starsHTML(p.rating.avg)} <span class="muted">${p.rating.avg.toFixed(1)} from ${plural(p.rating.count, 'reader')}</span></span>`
                  : '<span class="muted">No ratings yet — be the first</span>'}
-      ${p.item.genre ? `<span class="muted">Look in <strong>${esc(p.item.genre)}</strong></span>` : ''}
+      ${p.item.genre ? `<span class="muted">Look in <strong>${esc(p.item.genre)}</strong> ${genreArt(p.item.genre, 15)}</span>` : ''}
     </span></li>`).join('')}</ul>
   </div>`;
 }
@@ -460,7 +460,7 @@ function showSearch(q) {
     let status, action = '';
     if (it.status) status = 'Not on the shelf right now';
     else if (mineOut) status = 'You have this one';
-    else if (!loan) status = 'On the shelf' + (it.genre ? ` — look in <strong>${esc(it.genre)}</strong>` : '');
+    else if (!loan) status = 'On the shelf' + (it.genre ? ` — look in <strong>${esc(it.genre)}</strong> ${genreArt(it.genre, 15)}` : '');
     else if (inLine) status = `Checked out · you're number ${inLine} in line`;
     else {
       status = 'Checked out · ' + (isOverdue(loan) ? 'should be back soon' : 'back ' + esc(fmtDate(loan.dueAt)));
