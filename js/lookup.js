@@ -149,6 +149,7 @@ const GENRE_HINTS = [
   ['Biography', /biograph|memoir|autobiograph/],
   ['Dystopian', /dystopia|totalitarian|post-apocalyptic/, 'decisive'],
   ['Fantasy / Sci-Fi', /\bfantasy\b|\bmagic\b|dragons|wizards|science fiction|mytholog|folklore|fairy tales|horror|ghost stories|\bghosts\b|supernatural/],
+  ['Plays & Poems', /\bpoetry\b|\bpoems\b|\bdrama\b|\bplays\b|sonnets?|tragedies|english drama|american drama/],
   ['Historical Fiction', /historical fiction|history[^|]*fiction/],
   ['Adventure', /adventure|survival/],
   // Realistic Fiction is also where mysteries, funny books, sports and verse novels go.

@@ -17,8 +17,8 @@ const DEFAULT_SETTINGS = {
   nextBarcode: 1,
   // The classroom's own categories — rename, add or delete in Settings.
   genres: [
-    'Adventure', 'Biography', 'Dystopian', 'Fantasy / Sci-Fi',
-    'Graphic Novels', 'Historical Fiction', 'Nonfiction', 'Realistic Fiction'
+    'Adventure', 'Biography', 'Dystopian', 'Fantasy / Sci-Fi', 'Graphic Novels',
+    'Historical Fiction', 'Nonfiction', 'Plays & Poems', 'Realistic Fiction'
   ],
   genreSet: 2
 };

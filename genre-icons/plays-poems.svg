@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Plays &amp; Poems">
+  <title>Plays &amp; Poems</title>
+  <path d="M4.6 6.2C6.9 5 9.3 4.4 12 4.4s5.1.6 7.4 1.8c.2 6.6-2.4 13.4-7.4 13.4S4.4 12.8 4.6 6.2Z"/>
+  <ellipse cx="9.2" cy="9.7" rx="1" ry="1.2" fill="currentColor" stroke="none"/>
+  <ellipse cx="14.8" cy="9.7" rx="1" ry="1.2" fill="currentColor" stroke="none"/>
+  <path d="M9.1 13.9c.9.8 1.9 1.2 2.9 1.2s2-.4 2.9-1.2"/>
+</svg>

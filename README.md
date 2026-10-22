@@ -312,16 +312,18 @@ rules never stop you from doing the sensible thing in the moment.
 
 ## Genres
 
-Every book gets one of eight genres:
+Every book gets one of nine genres:
 
 Adventure · Biography · Dystopian · Fantasy / Sci-Fi · Graphic Novels ·
-Historical Fiction · Nonfiction · Realistic Fiction
+Historical Fiction · Nonfiction · Plays & Poems · Realistic Fiction
 
 Where the in-between kinds of books go:
 
 | Kind of book | Genre |
 | --- | --- |
-| Mystery, funny books, sports stories, novels in verse, picture books | Realistic Fiction |
+| Mystery, funny books, sports stories, picture books | Realistic Fiction |
+| Plays, poetry collections, epic poems | Plays & Poems |
+| Novels told in verse — the story decides, not the form | their story's genre |
 | Mythology, folktales, scary and ghost stories, science fiction | Fantasy / Sci-Fi |
 | Memoir | Biography |
 

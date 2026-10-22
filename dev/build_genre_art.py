@@ -7,7 +7,7 @@ import json, re, os
 ORDER = [('Adventure', 'adventure'), ('Biography', 'biography'), ('Dystopian', 'dystopian'),
          ('Fantasy / Sci-Fi', 'fantasy-sci-fi'), ('Graphic Novels', 'graphic-novels'),
          ('Historical Fiction', 'historical-fiction'), ('Nonfiction', 'nonfiction'),
-         ('Realistic Fiction', 'realistic-fiction')]
+         ('Realistic Fiction', 'realistic-fiction'), ('Plays & Poems', 'plays-poems')]
 
 HEADER = """/* ---------------------------------------------------------------
    The genre drawings, inlined so labels print with no network and no
