@@ -19,7 +19,7 @@ import base64, hashlib, json, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-REPO = "homejeopardy/library-data"
+REPOS = ("homejeopardy/library-data", "homejeopardy/library-accounts")
 KEY = "test-key"
 files = {}          # path -> bytes
 commits = []        # (path, message)
@@ -83,18 +83,20 @@ class Handler(BaseHTTPRequestHandler):
             time.sleep(state["latency"] / 1000)
         if state["down"]:
             return self.reply(503, {"message": "Service unavailable"})
-        if self.headers.get("Authorization") != "Bearer " + KEY:
-            return self.reply(401, {"message": "Bad credentials"})
         path = urlparse(self.path).path
-        prefix = "/repos/" + REPO
-        if not path.startswith(prefix):
+        repo = next((r for r in REPOS if path.startswith("/repos/" + r)), None)
+        if not repo:
             return self.reply(404, {"message": "Not Found"})
-        rest = path[len(prefix):]
+        # A public repo reads without a key, exactly as GitHub's does; writing still needs one.
+        public = not repo.endswith("-data")
+        if self.headers.get("Authorization") != "Bearer " + KEY and not (public and method == "GET"):
+            return self.reply(401, {"message": "Bad credentials"})
+        rest = path[len("/repos/" + repo):]
         if rest == "" and method == "GET":
-            return self.reply(200, {"full_name": REPO, "private": True})
+            return self.reply(200, {"full_name": repo, "private": repo.endswith("-data")})
         if not rest.startswith("/contents/"):
             return self.reply(404, {"message": "Not Found"})
-        name = rest[len("/contents/"):]
+        name = repo + "/" + rest[len("/contents/"):]
         with lock:
             if method == "GET":
                 if name not in files:
@@ -135,5 +137,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8788
-    print("mock GitHub API on http://localhost:%d  (repo %s, key %s)" % (port, REPO, KEY), flush=True)
+    print("mock GitHub API on http://localhost:%d  (repos %s, key %s)" % (port, ", ".join(REPOS), KEY), flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

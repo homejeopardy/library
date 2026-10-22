@@ -144,6 +144,20 @@ a { color: var(--accent); }
 .sync-pill.error::before, .sync-dot.error { background: var(--danger); }
 @keyframes pulse { 50% { opacity: .3; } }
 .sync-line { font-size: 14px; margin: 6px 0 0; }
+.who {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.who:hover { color: var(--text); border-color: var(--border-strong); }
+.sign-in { max-width: 420px; margin: 8vh auto 0; }
+.sign-in h2 { margin: 0 0 18px; font-size: 20px; }
 .station-lock h2 { margin-top: 24px; }
 /* Present for a password manager to read, invisible to everyone else. */
 .sr-only {

@@ -5,6 +5,9 @@
    --------------------------------------------------------------- */
 const SYNC_CONFIG = {
   dataRepo: 'homejeopardy/library-data',
+  // PUBLIC repository holding accounts.json: each account's password-locked copy of the
+  // access key (see js/accounts.js). Nothing in it is readable without a password.
+  accountsRepo: 'homejeopardy/library-accounts',
   apiBase: 'https://api.github.com',
   pollSeconds: 20
 };

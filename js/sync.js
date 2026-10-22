@@ -401,7 +401,7 @@ const Sync = (function () {
   if (configured()) syncNow();
 
   return {
-    role: ROLE, repo: repo, configured: configured, hasEverSynced: hasEverSynced,
+    role: ROLE, repo: repo, configured: configured, hasEverSynced: hasEverSynced, key: accessKey,
     pairingURL: pairingURL, keyFromOtherPage: keyFromOtherPage, handedOver: () => handedOver,
     status: () => status, describe: describe, pendingChanges: pendingChanges,
     syncNow: syncNow, connect: connect, adopt: adopt, disconnect: disconnect,

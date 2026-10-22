@@ -110,24 +110,33 @@ app's own repository is public.
 
 ### One-time setup (about 10 minutes)
 
-1. **Create the data repository.** On GitHub: **New repository** → name it
-   `library-data` → choose **Private** → **Create repository**. Nothing needs to go in it.
+1. **Create two repositories.** On GitHub: **New repository** → `library-data` →
+   **Private** → **Create repository**. Then another → `library-accounts` → **Public**.
+   Nothing needs to go in either. The private one holds the library; the public one holds
+   each person's password-locked copy of the access key, which is useless without the
+   password.
 2. **Create an access key.** GitHub → your profile picture → **Settings** →
    **Developer settings** → **Personal access tokens** → **Fine-grained tokens** →
    **Generate new token**:
    - Name: `Classroom Library`
    - Expiration: the longest it offers — and put a reminder in your calendar for the day before
-   - Repository access: **Only select repositories** → `library-data`
+   - Repository access: **Only select repositories** → `library-data` **and**
+     `library-accounts`
    - Permissions → Repository permissions → **Contents: Read and write**
    - **Generate token**, and copy it (it starts `github_pat_`). GitHub shows it once.
-3. **Your main computer** — the one that already has your library. Admin page →
-   **Settings → Sync across devices** → paste the key → **Connect**. Your books and
-   students upload. **This is the only time the key is ever typed.**
-4. **Every other device:** on that first computer, open **Settings → Sync across devices →
-   Set up another device**. It gives you a link for the student station and a link for the
-   admin page, each with a **Copy** button and a **QR** code. Open the link on the other
-   device — or point its camera at the code — and it sets itself up and starts syncing.
-   Bookmark the station link there, or make it the home page.
+3. **Your main computer** — the one that already has your library. Open the app, choose
+   **Use the access key instead**, paste the key, **Connect**. Your books and students
+   upload. **This is the only time the key is ever typed.**
+4. **Make your account.** Type your name on the sign-in screen and pick a password (at
+   least 8 characters). From now on, that name and password open the library on any
+   computer — you never touch the key again.
+5. **Every other computer:** go to the site, sign in with your name and password. That's
+   the whole setup. If the browser's data is ever cleared, sign in again and everything
+   comes back.
+6. **The student station** is different: it runs without anyone signed in, so it keeps its
+   own one-time setup. On your computer, **Settings → Sync across devices → Set up another
+   device** gives a station link with a **Copy** button, a **QR** code and a **File**
+   button. Open the link on the classroom device and bookmark it there.
 
 The link carries the key in the part of a web address browsers never send to a server, and
 the receiving page wipes it out of the address bar before it does anything else. Still,
@@ -242,6 +251,20 @@ remembers who had it last.
 A marked book stays in the catalog with all its history. It will not be checked out (the
 desk can still override), will not fill a hold, and the student station tells anyone who
 scans it to give it to you. **Back on the shelf** undoes all of that.
+
+## Who can sign in
+
+**Settings → Who can sign in** lists the accounts. A new person signs in on a computer
+that is already connected, types their name, and picks a password — the app locks a copy
+of the access key with it. **Reset password** removes their locked copy; they pick a new
+one next time they sign in on a connected computer. Nobody, including you, can look up an
+existing password.
+
+Accounts live in the public `library-accounts` repository. Each entry is the access key
+encrypted with that person's password (AES-GCM, with the password stretched by PBKDF2 at
+310,000 iterations), so the file gives nothing away on its own. Because it is public,
+**password strength is what protects the library** — eight characters is the floor, and a
+few unrelated words beat a short clever one.
 
 ## Needs attention
 

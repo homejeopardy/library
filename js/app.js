@@ -57,9 +57,14 @@ document.addEventListener('keydown', e => {
 function render() {
   document.getElementById('brand-name').textContent = S().libraryName || 'Classroom Library';
   renderSyncPill();
+  const who = document.getElementById('who');
+  who.hidden = !Auth.me();
+  who.textContent = Auth.me() ? 'Sign out (' + Auth.me() + ')' : '';
   const locked = Sync.stationOnly();
-  document.getElementById('tabs').hidden = locked;
+  const gated = !locked && Auth.needsSignIn();
+  document.getElementById('tabs').hidden = locked || gated;
   if (locked) { renderStationLock(); return; }
+  if (gated) { renderSignIn(); return; }
   document.title = (S().libraryName || 'Classroom Library');
   Array.from(document.querySelectorAll('.tab')).forEach(t => {
     t.classList.toggle('active', t.dataset.route === route);
@@ -107,6 +112,7 @@ function renderSyncPill() {
 }
 window.addEventListener('sync:status', renderSyncPill);
 document.getElementById('sync-pill').addEventListener('click', () => go('settings'));
+document.getElementById('who').addEventListener('click', () => Auth.signOut());
 
 function syncStatusLine() {
   const st = Sync.status();
@@ -151,6 +157,142 @@ function syncSettingsHTML() {
     </div>
     <p class="hint">When the key expires, paste a new one below on this computer, then re-open the links above on the others.</p>
     ${keyFormHTML('Update key', false)}`;
+}
+
+/* ------------------------------ signing in ------------------------------
+   An account unlocks the access key with a password, so the library opens
+   on any computer without the key being typed or pasted. Who is signed in
+   is remembered in this browser until they sign out.
+   ------------------------------------------------------------------------ */
+
+const Auth = (function () {
+  const ME = 'classroom-library-me';
+  const SEEN = 'classroom-library-has-accounts';
+  const get = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const set = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
+
+  /* Ask for a sign-in when accounts are known to exist, or when this browser
+     has no key of its own — never on a connected computer that predates
+     accounts, which would lock the teacher out of her own library. */
+  function needsSignIn() {
+    if (get(ME)) return false;
+    return get(SEEN) === '1' || !Sync.configured();
+  }
+
+  /* Remember whether accounts exist, so the gate works before the network answers. */
+  function noteAccounts(list) { set(SEEN, list && list.length ? '1' : null); }
+
+  return {
+    me: () => get(ME),
+    signIn: name => { set(ME, name); render(); },
+    signOut: () => { set(ME, null); render(); },
+    needsSignIn: needsSignIn,
+    noteAccounts: noteAccounts
+  };
+})();
+
+let gate = { step: 'name', name: '', account: null, error: '', busy: false };
+
+function renderSignIn() {
+  const g = gate;
+  const body = {
+    name: `<p>Sign in to open the library.</p>
+      <label class="field"><span>Your name</span>
+        <input name="who" autocomplete="username" value="${esc(g.name)}" placeholder="e.g. Catherine"></label>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Continue</button>
+        <button type="button" class="btn btn-quiet" data-gate="key">Use the access key instead</button>
+      </div>`,
+    password: `<p>Welcome back, <strong>${esc(g.name)}</strong>.</p>
+      <input class="sr-only" type="text" name="username" value="${esc(g.name)}" autocomplete="username" readonly tabindex="-1" aria-hidden="true">
+      <label class="field"><span>Password</span>
+        <input name="password" type="password" autocomplete="current-password" placeholder="Your password"></label>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Sign in</button>
+        <button type="button" class="btn btn-quiet" data-gate="name">Back</button>
+      </div>`,
+    create: `<p>First time for <strong>${esc(g.name)}</strong> — pick a password. You'll use it with your name on any computer.</p>
+      <input class="sr-only" type="text" name="username" value="${esc(g.name)}" autocomplete="username" readonly tabindex="-1" aria-hidden="true">
+      <div class="grid-2">
+        <label class="field"><span>Password</span>
+          <input name="password" type="password" autocomplete="new-password"></label>
+        <label class="field"><span>And again</span>
+          <input name="again" type="password" autocomplete="new-password"></label>
+      </div>
+      <p class="hint">At least ${Accounts.MIN_PASSWORD} characters. Nobody can look it up for you, but it can be reset from Settings.</p>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Save and sign in</button>
+        <button type="button" class="btn btn-quiet" data-gate="name">Back</button>
+      </div>`,
+    key: `<p>Only needed on the very first computer, or if the key has changed. After this, people sign in with a name and password.</p>
+      <label class="field"><span>GitHub access key</span>
+        <input name="key" type="password" autocomplete="current-password" placeholder="github_pat_…"></label>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Connect this computer</button>
+        <button type="button" class="btn btn-quiet" data-gate="name">Back</button>
+      </div>`
+  }[g.step];
+
+  view.innerHTML = `<section class="pane narrow sign-in">
+    <h2>${esc(S().libraryName || 'Classroom Library')}</h2>
+    <form id="gate-form" autocomplete="on">${body}
+      ${g.error ? `<p class="danger">${esc(g.error)}</p>` : ''}
+    </form>
+  </section>`;
+
+  const form = document.getElementById('gate-form');
+  form.addEventListener('submit', e => { e.preventDefault(); gateSubmit(form); });
+  form.addEventListener('click', e => {
+    const to = e.target.dataset && e.target.dataset.gate;
+    if (to) { gate = { step: to, name: gate.name, account: gate.account, error: '' }; renderSignIn(); }
+  });
+  const first = form.querySelector('input:not([readonly])');
+  if (first) first.focus();
+}
+
+async function gateSubmit(form) {
+  const btn = form.querySelector('[type="submit"]');
+  btn.disabled = true;
+  const fail = message => { gate.error = message; btn.disabled = false; renderSignIn(); };
+  try {
+    if (gate.step === 'name') {
+      const typed = form.who.value.trim();
+      if (!typed) return fail('Type your name.');
+      gate.name = typed;
+      const all = (await Accounts.load()).accounts;
+      Auth.noteAccounts(all);
+      const account = all.find(a => Accounts.norm(a.user) === Accounts.norm(typed));
+      if (account) gate = { step: 'password', name: account.name, account: account, error: '' };
+      else if (Sync.configured()) gate = { step: 'create', name: typed, account: null, error: '' };
+      else return fail('There is no account for ' + typed + ' yet. The first time, sign in on a computer that is already set up, or use the access key below.');
+      return renderSignIn();
+    }
+
+    if (gate.step === 'password') {
+      const token = await Accounts.unlock(gate.account, form.password.value);
+      const res = await Sync.connect(token);
+      if (res.next === 'ask') Sync.adopt(res.summary, 'merge');
+      await Sync.syncNow();
+      requestPersistence();
+      return Auth.signIn(gate.account.name);
+    }
+
+    if (gate.step === 'create') {
+      if (form.password.value !== form.again.value) return fail("Those two passwords don't match.");
+      await Accounts.save(gate.name, form.password.value, Sync.key());
+      Auth.noteAccounts([1]);
+      return Auth.signIn(gate.name);
+    }
+
+    if (gate.step === 'key') {
+      await connectWithKey(form.key.value, btn);
+      if (!Sync.configured()) return fail('That key did not work.');
+      gate = { step: 'name', name: gate.name, account: null, error: '' };
+      return renderSignIn();
+    }
+  } catch (e) {
+    fail(e.message);
+  }
 }
 
 /* A proper sign-in form: a password manager will only offer to remember a
@@ -245,6 +387,26 @@ async function drawPairingQR(which) {
       <p class="hint">Point the other device's camera at this. It opens the ${which === 'student' ? 'student station' : 'admin page'}, already set up.</p>`;
   } catch (e) {
     box.innerHTML = '<p class="hint">The code needs internet to draw. Copy the link instead.</p>';
+  }
+}
+
+async function drawAccounts() {
+  const box = document.getElementById('accounts-list');
+  if (!box) return;
+  try {
+    const list = (await Accounts.load()).accounts;
+    Auth.noteAccounts(list);
+    box.innerHTML = list.length
+      ? `<ul class="genre-admin">${list.map(a => `<li>
+          <span>${esc(a.name)}${Accounts.norm(a.user) === Accounts.norm(Auth.me() || '') ? ' <span class="muted small">(you)</span>' : ''}</span>
+          <span class="muted small">since ${esc(fmtDate(a.at))}</span>
+          <span class="row-actions"><button class="link danger" data-act="account-reset" data-id="${esc(a.user)}">Reset password</button></span>
+        </li>`).join('')}</ul>`
+      : `<p class="muted">No accounts yet. ${Sync.configured()
+          ? 'Sign out and sign in with your name to make the first one.'
+          : 'Connect this computer first.'}</p>`;
+  } catch (e) {
+    box.innerHTML = `<p class="muted">Could not load the list: ${esc(e.message)}</p>`;
   }
 }
 
@@ -1282,6 +1444,12 @@ VIEWS.settings = function () {
     <h2 class="section-title">Sync across devices</h2>
     ${syncSettingsHTML()}
 
+    <h2 class="section-title">Who can sign in</h2>
+    <p class="hint">Each person unlocks the library with their own password, on any computer, without the access key.
+      A new person signs in here on this computer and picks a password the first time.
+      Accounts live in <code>${esc(Accounts.repo())}</code>; the password is never stored anywhere.</p>
+    <div id="accounts-list" class="muted">Loading…</div>
+
     <h2 class="section-title">Genres</h2>
     <p class="hint">These are the choices in the Genre menu when you add a book. Renaming a genre updates every book in it; renaming one onto another merges them.</p>
     <ul class="genre-admin">
@@ -1325,6 +1493,7 @@ VIEWS.settings = function () {
 
 AFTER.settings = function () {
   showPersistence();
+  drawAccounts();
   view.querySelectorAll('.key-form').forEach(form => form.addEventListener('submit', e => {
     e.preventDefault();
     connectWithKey(form.querySelector('#sync-key').value, form.querySelector('button[type="submit"]'));
@@ -1605,6 +1774,18 @@ shared drives and out of the hands of students.</p>
     toast(st.state === 'ok' ? 'Up to date.' : st.detail, st.state === 'ok' ? 'ok' : 'error');
     render();
   },
+  'account-reset': async user => {
+    if (!confirm('Reset ' + user + "'s password? They pick a new one next time they sign in on a computer that is already connected.")) return;
+    try {
+      await Accounts.remove(user);
+      toast('Password reset.', 'ok');
+      if (Accounts.norm(user) === Accounts.norm(Auth.me() || '')) Auth.signOut();
+      else drawAccounts();
+    } catch (e) { toast(e.message, 'error'); }
+  },
+
+  'sign-out': () => Auth.signOut(),
+
   'sync-disconnect': () => {
     if (!confirm('Stop syncing on this computer? Its copy of the library stays here; other devices keep the shared library.')) return;
     Sync.disconnect();
