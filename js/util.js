@@ -118,3 +118,21 @@ function stamp() {
   const p = n => String(n).padStart(2, '0');
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
+
+/* ---------------------------------------------------------------
+   Call letters for a spine label: the first three letters of the
+   title, ignoring the small words libraries file past.
+   "The Lion, the Witch and the Wardrobe" -> LIO, "Of Mice and Men" -> MIC,
+   "I Am Malala" -> IAM (the first word is too short on its own).
+   --------------------------------------------------------------- */
+
+const FILING_SKIP = ['a', 'an', 'the', 'of', 'and', 'or', 'in', 'on', 'at', 'to', 'for'];
+
+function callLetters(title) {
+  const clean = String(title || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // Muñoz -> Munoz
+    .replace(/['\u2019]/g, '');                          // Charlotte's -> Charlottes
+  const words = clean.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  const kept = words.filter(w => !FILING_SKIP.includes(w.toLowerCase()));
+  return (kept.join('') || words.join('')).slice(0, 3).toUpperCase();
+}

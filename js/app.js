@@ -782,13 +782,19 @@ function openHoldModal(itemId) {
 
 /* ============================== CATALOG ============================== */
 
-VIEWS.catalog = function () {
+/* What the catalog is showing right now, after the search box and both filters. */
+function currentCatalogItems() {
   let items = searchItems(ui.catalogQuery);
   if (ui.catalogFilter === 'out') items = items.filter(i => activeLoanForItem(i.id));
   if (ui.catalogFilter === 'in') items = items.filter(i => !activeLoanForItem(i.id));
   if (ui.catalogFilter === 'overdue') items = items.filter(i => isOverdue(activeLoanForItem(i.id)));
   if (ui.catalogGenre === '__none__') items = items.filter(i => !i.genre);
   else if (ui.catalogGenre) items = items.filter(i => normName(i.genre) === normName(ui.catalogGenre));
+  return items;
+}
+
+VIEWS.catalog = function () {
+  const items = currentCatalogItems();
 
   const used = genreList().filter(g => booksInGenre(g).length);
   const untagged = DB.items.filter(i => !i.genre).length;
@@ -808,6 +814,7 @@ VIEWS.catalog = function () {
       </div>
       <span class="spacer"></span>
       <button class="btn btn-primary" data-act="new-item">Add a book</button>
+      <button class="btn btn-quiet" data-act="print-labels">Print labels</button>
       <button class="btn btn-quiet" data-act="print-shelflist">Print list</button>
     </div>
     ${items.length ? `
@@ -1345,6 +1352,7 @@ Object.assign(ACTIONS, {
   },
 
   'print-notices': () => printOverdueNotices(),
+  'print-labels': () => openLabelsModal(),
   'print-shelflist': () => printShelfList()
 });
 
@@ -1406,6 +1414,100 @@ function printShelfList() {
     <p class="notice-foot">Printed ${esc(fmtDateFull(nowISO()))}</p>
   </section>`;
   printHTML(html);
+}
+
+/* ----------------------------- spine labels -----------------------------
+   0.66in wide, 1in tall: the genre drawing, its name in small type, the
+   call letters big enough to read on a shelf, and the barcode number for
+   the desk. Printed butt-joined on a full label sheet so one cut with a
+   paper trimmer serves both neighbours.
+   ----------------------------------------------------------------------- */
+
+const LABELS_PER_ROW = 11;
+
+function labelHTML(item) {
+  return `<div class="spine-label">
+    <span class="sl-art">${genreArt(item.genre, '0.26in')}</span>
+    <span class="sl-genre">${esc(item.genre || '')}</span>
+    <span class="sl-code">${esc(callLetters(item.title))}</span>
+    <span class="sl-num">${esc(item.barcode)}</span>
+  </div>`;
+}
+
+function printLabels(items, skip) {
+  const blanks = Array(Math.max(0, skip || 0)).fill('<div class="spine-label blank"></div>').join('');
+  printHTML(`<div class="label-sheet">${blanks}${items.map(labelHTML).join('')}</div>`);
+}
+
+/* Books with no genre: ask the lookup services what they are, and take the
+   top suggestion. Flagged as a guess so they can be checked later. */
+async function guessMissingGenres(items, say) {
+  const todo = items.filter(i => !i.genre && i.isbn);
+  const noIsbn = items.filter(i => !i.genre && !i.isbn).length;
+  const done = [];
+  let offline = false;
+  for (let i = 0; i < todo.length; i++) {
+    say('Looking up ' + (i + 1) + ' of ' + todo.length + '…');
+    try {
+      const data = await lookupISBN(todo[i].isbn);
+      const g = data && suggestGenres(data.subjects, S().genres)[0];
+      if (g) { updateItem(todo[i].id, { genre: g, genreGuessed: true }); done.push(todo[i].title + ' → ' + g); }
+    } catch (e) { offline = true; break; }
+  }
+  return { done: done, offline: offline, noIsbn: noIsbn, tried: todo.length };
+}
+
+function openLabelsModal() {
+  const listed = currentCatalogItems();
+  const scopes = [
+    ['listed', 'The ' + plural(listed.length, 'book') + ' listed in the catalog now', listed],
+    ['all', 'Every book (' + DB.items.length + ')', DB.items.slice().sort(byTitle)]
+  ];
+
+  function draw(scopeKey, skip, summary) {
+    const scope = scopes.find(x => x[0] === scopeKey) || scopes[0];
+    const items = scope[2];
+    const missing = items.filter(i => !i.genre).length;
+    openModal('Print spine labels', `
+      <label class="field"><span>Which books</span>
+        <select name="scope">${scopes.map(x => `<option value="${x[0]}" ${x[0] === scopeKey ? 'selected' : ''}>${esc(x[1])}</option>`).join('')}</select>
+      </label>
+      <label class="field"><span>Skip this many spaces on the sheet</span>
+        <input name="skip" type="number" min="0" max="109" value="${skip}">
+      </label>
+      <p class="hint">Starts at the top-left of the sheet. Skip spaces to carry on down a part-used sheet.</p>
+      ${summary ? `<p class="note">${esc(summary)}</p>` : ''}
+      ${missing ? `<p class="note" id="guess-note">${plural(missing, 'book has', 'books have')} no genre, so ${missing === 1 ? 'its label' : 'their labels'} would print without a picture.
+        <button type="button" class="btn" id="guess-genres">Guess from the internet</button></p>` : ''}
+      <h3 class="section-title">How they will print — actual size</h3>
+      <div class="label-preview">${items.slice(0, 5).map(labelHTML).join('') || '<p class="muted">No books to label.</p>'}</div>
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="do-print" ${items.length ? '' : 'disabled'}>Print ${plural(items.length, 'label')}</button>
+        <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+      </div>
+      <p class="hint">Print onto full-sheet label paper, then cut along the guide lines. ${LABELS_PER_ROW} across, 10 down — ${LABELS_PER_ROW * 10} to a sheet.</p>
+    `, body => {
+      const scopeSel = body.querySelector('[name="scope"]');
+      const skipInput = body.querySelector('[name="skip"]');
+      scopeSel.addEventListener('change', () => draw(scopeSel.value, Number(skipInput.value) || 0, summary));
+      skipInput.addEventListener('change', () => draw(scopeSel.value, Math.max(0, Number(skipInput.value) || 0), summary));
+      body.querySelector('#do-print').addEventListener('click', () => {
+        closeModal();
+        printLabels(items, Math.max(0, Number(skipInput.value) || 0));
+      });
+      const guess = body.querySelector('#guess-genres');
+      if (guess) guess.addEventListener('click', async () => {
+        guess.disabled = true;
+        const res = await guessMissingGenres(items, msg => { guess.textContent = msg; });
+        render();
+        draw(scopeSel.value, Math.max(0, Number(skipInput.value) || 0),
+          (res.done.length ? 'Filled in ' + plural(res.done.length, 'genre') + ': ' + res.done.join(', ') + '. Worth checking in the catalog.' : 'No genres could be worked out.') +
+          (res.offline ? ' The lookup services could not be reached, so the rest were left alone.' : '') +
+          (res.noIsbn ? ' ' + plural(res.noIsbn, 'book has', 'books have') + ' no ISBN to look up — set those by hand.' : ''));
+      });
+    });
+  }
+  draw('listed', 0);
 }
 
 /* ============================ SAMPLE DATA ============================ */

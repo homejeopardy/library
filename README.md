@@ -155,6 +155,41 @@ The intended rhythm at the desk, with a scanner and no mouse:
 For a stack of books, use **Add & add another**: the next dialog opens blank, ready for the
 next ISBN, and suggests a genre for that book.
 
+## Printing spine labels
+
+**Catalog → Print labels.** Each label is 0.66&Prime; wide and 1&Prime; tall, and carries, top to
+bottom: the genre picture, the genre name in small type, the first three letters of the
+title in large type, and the book's barcode number.
+
+The three letters skip the small words a library files past — *The Lion, the Witch and the
+Wardrobe* becomes `LIO`, *Of Mice and Men* becomes `MIC`. Two books can end up with the
+same letters; the barcode number underneath tells them apart.
+
+**Printing:** choose the books currently listed in the catalog (so the search box and the
+genre filter decide what you get) or every book. Print onto full-sheet label paper — 11
+labels across, 10 down, 110 to a sheet — and cut along the hairline guides. Labels sit
+edge to edge, so one pass with a paper trimmer cuts both neighbours. To use the rest of a
+part-cut sheet, set **skip this many spaces**.
+
+**Books with no genre** print without a picture. The dialog offers to guess them from
+their ISBNs; anything it fills in is marked as a guess, so it's worth a look in the
+catalog afterwards.
+
+### The genre pictures
+
+`genre-icons/` holds one SVG per genre — line drawings, black and white, each built around
+a single idea so it survives being printed at label size. They use `currentColor`, so the
+same file prints black and turns light in the app's dark mode.
+
+`js/genre-art.js` is generated from that folder, and is what the app actually draws from
+(no network, nothing to load). After editing an icon, regenerate it:
+
+```bash
+python3 dev/build_genre_art.py
+```
+
+Open `dev/genre-icons.html` to see every icon at icon, tag and real label size.
+
 ## Settings worth setting
 
 | Setting | Default | Notes |
@@ -214,10 +249,14 @@ js/config.js        which GitHub repository holds the shared data
 js/util.js          dates, formatting, CSV, toasts
 js/store.js         the data model and every rule (loans, holds, limits, merges, backup)
 js/sync.js          GitHub sync: fetch, three-way merge, write, retry
+js/genre-art.js     the genre drawings, inlined for printing
 js/kiosk.js         the student page
 js/lookup.js    ISBN → book data (Open Library, then Google Books), and genre hints
 js/app.js           admin page: routing, views, and the circulation desk
+genre-icons/        one SVG per genre (source for js/genre-art.js)
 dev/mock_github_api.py  a local stand-in for GitHub's API, for testing sync
+dev/build_genre_art.py  regenerates js/genre-art.js from genre-icons/
+dev/genre-icons.html    every icon at icon, tag and label size
 ```
 
 Plain JavaScript with no framework and no build step, so the whole thing stays editable

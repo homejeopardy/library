@@ -585,12 +585,56 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .toast.out { opacity: 0; transition: opacity .3s; }
 @keyframes rise { from { transform: translateY(8px); opacity: 0; } }
 
+/* ---------------- spine labels ---------------- */
+
+/* One label. Sized in inches so the screen preview is the printed size. */
+.spine-label {
+  width: 0.66in;
+  height: 1in;
+  padding: 0.03in 0.02in;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.015in;
+  text-align: center;
+  overflow: hidden;
+  color: #000;
+  background: #fff;
+  border: 1px dotted var(--border-strong);
+  break-inside: avoid;
+}
+.sl-art { line-height: 0; margin-top: 0.02in; }
+.sl-genre {
+  font-size: 4.8pt;
+  line-height: 1.12;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  max-width: 100%;
+}
+.sl-code {
+  font-size: 15pt;
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: .01em;
+  margin-top: auto;
+}
+.sl-num { font-family: var(--mono); font-size: 4.8pt; line-height: 1; margin-bottom: 0.02in; }
+
+.label-preview { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.label-sheet { display: grid; grid-template-columns: repeat(11, 0.66in); }
+
 /* ---------------- printing ---------------- */
 
 .print-area { display: none; }
 
+@page { size: letter; margin: 0.5in; }
+
 @media print {
   .topbar, .view, .toasts, #modal { display: none !important; }
+  /* Hairline cut guides; labels sit edge to edge so one cut serves two. */
+  .spine-label { border: 0.25pt solid #bbb; margin: 0 -0.125pt -0.125pt 0; }
+  .spine-label.blank * { visibility: hidden; }
   .print-area { display: block; color: #000; background: #fff; font-size: 12pt; }
   .notice { page-break-after: always; padding: 24px 0; }
   .notice:last-child { page-break-after: auto; }
