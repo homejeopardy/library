@@ -145,6 +145,12 @@ a { color: var(--accent); }
 @keyframes pulse { 50% { opacity: .3; } }
 .sync-line { font-size: 14px; margin: 6px 0 0; }
 .station-lock h2 { margin-top: 24px; }
+.pair-row { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
+.pair-row .field { flex: 1; min-width: 0; }
+.pair-row input { font-family: var(--mono); font-size: 12px; }
+.qr-box { margin-top: 14px; }
+.qr { display: inline-block; padding: 12px; background: #fff; border-radius: 8px; }
+.qr svg { display: block; width: 180px; height: 180px; }
 code { font-family: var(--mono); font-size: .92em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
 
 /* ---------------- layout ---------------- */

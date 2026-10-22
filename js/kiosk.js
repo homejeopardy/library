@@ -40,7 +40,9 @@ function screenSetup(message) {
   main.innerHTML = `
   <section class="k-card k-setup">
     <h1>Set up the student station</h1>
-    <p>Teacher: paste the library's GitHub access key to connect this device. Students never see it.</p>
+    <p>Teacher: on the computer that runs the library, go to <strong>Settings → Sync across devices →
+      Set up another device</strong> and open the student station link here. Nothing needs typing.</p>
+    <p class="hint">Or paste the access key by hand. Students never see it.</p>
     <label class="field"><span>GitHub access key</span>
       <input id="k-key" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
     <div class="actions"><button class="btn btn-primary" id="k-connect">Connect</button></div>
@@ -48,10 +50,11 @@ function screenSetup(message) {
   </section>`;
   const input = document.getElementById('k-key');
   const btn = document.getElementById('k-connect');
-  const go = async () => {
-    btn.disabled = true; btn.textContent = 'Connecting…';
+  const go = async (key, which) => {
+    which = which || btn;
+    which.disabled = true; which.textContent = 'Connecting…';
     try {
-      const res = await Sync.connect(input.value);
+      const res = await Sync.connect(key != null ? key : input.value);
       if (res.next === 'ask') {
         const keep = confirm('This device already has a library of its own.\n\nOK = add it to the shared library.\nCancel = use only the shared library.');
         Sync.adopt(res.summary, keep ? 'merge' : 'shared');
@@ -64,9 +67,11 @@ function screenSetup(message) {
       screenSetup(e.message);
     }
   };
-  btn.addEventListener('click', go);
+  btn.addEventListener('click', () => go());
   input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
-  input.focus();
+  // Arrived from a pairing link: connect without anyone touching the keyboard.
+  if (Sync.handedOver()) go(Sync.handedOver(), btn);
+  else input.focus();
 }
 
 function screenLoading() {

@@ -97,12 +97,22 @@ app's own repository is public.
    - Repository access: **Only select repositories** → `library-data`
    - Permissions → Repository permissions → **Contents: Read and write**
    - **Generate token**, and copy it (it starts `github_pat_`). GitHub shows it once.
-3. **Your main computer first** — the one that already has your library. Admin page →
+3. **Your main computer** — the one that already has your library. Admin page →
    **Settings → Sync across devices** → paste the key → **Connect**. Your books and
-   students upload.
-4. **Any other computer:** same thing. It downloads the shared library.
-5. **The student station:** open `/student/` on the classroom device, paste the same key,
-   **Connect**. Bookmark it or make it the home page.
+   students upload. **This is the only time the key is ever typed.**
+4. **Every other device:** on that first computer, open **Settings → Sync across devices →
+   Set up another device**. It gives you a link for the student station and a link for the
+   admin page, each with a **Copy** button and a **QR** code. Open the link on the other
+   device — or point its camera at the code — and it sets itself up and starts syncing.
+   Bookmark the station link there, or make it the home page.
+
+The link carries the key in the part of a web address browsers never send to a server, and
+the receiving page wipes it out of the address bar before it does anything else. Still,
+**anyone holding a link can read and change the library**, so treat them like the key
+itself: your own devices, never posted anywhere.
+
+The student page and the admin page on the *same browser* share one key automatically, so
+that computer only ever needs setting up once.
 
 If a device that already had its own library connects to a shared library that also has
 one, it asks whether to keep both (merge) or use only the shared one — and in the second
@@ -124,9 +134,10 @@ case downloads the device's old library as a backup file first.
 
 ### When the key expires
 
-Devices show **"GitHub rejected the access key"**. Make a new key (step 2), then paste it
-in **Settings → Replace access key** on each computer, and on the student station's
-setup screen. Nothing is lost — changes made in the meantime upload once the key works.
+Devices show **"GitHub rejected the access key"**. Make a new key (step 2) and paste it in
+**Settings → Replace access key** on your main computer — then re-open the setup links on
+the others, exactly as in step 4, so you still only type it once. Nothing is lost; changes
+made in the meantime upload as soon as the key works.
 
 ### What the key can and can't protect
 

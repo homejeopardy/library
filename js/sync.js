@@ -46,6 +46,33 @@ const Sync = (function () {
 
   const accessKey = () => lsGet(KEY_PREFIX + ROLE);
   const configured = () => !!accessKey();
+
+  /* The key this browser already holds for its other page, if any. Going
+     admin -> student is a click; the reverse still asks, so a student at
+     the station cannot walk into the admin page. */
+  const keyFromOtherPage = () => (ROLE === 'student' ? lsGet(KEY_PREFIX + 'admin') : null);
+
+  /* A link that sets a device up without anyone retyping the key. The key
+     rides in the fragment, which browsers never send to a server, and the
+     receiving page wipes it from the address bar before anything else. */
+  function pairingURL(which) {
+    const key = accessKey();
+    if (!key) return '';
+    const base = location.origin + location.pathname.replace(/student\/$/, '');
+    return (which === 'student' ? base + 'student/' : base) + '#setup=' + encodeURIComponent(key);
+  }
+
+  /* Returns a key handed over by a pairing link, and clears it from the
+     address bar and history entry straight away. */
+  function keyFromLink() {
+    const m = (location.hash || '').match(/[#&]setup=([^&]+)/);
+    if (!m) return '';
+    let key = '';
+    try { key = decodeURIComponent(m[1]); } catch (e) { key = ''; }
+    const clean = location.hash.replace(/[#&]setup=[^&]*/, '');
+    history.replaceState(null, '', location.pathname + location.search + (clean && clean !== '#' ? clean : ''));
+    return key;
+  }
   const hasEverSynced = () => !!(base.catalog && base.circulation);
   const repo = () => SYNC_CONFIG.dataRepo;
 
@@ -364,10 +391,18 @@ const Sync = (function () {
   window.addEventListener('storage', e => { if (e.key === BASE_KEY) base = readBase(); });
   setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, (SYNC_CONFIG.pollSeconds || 20) * 1000);
 
+  const handedOver = keyFromLink();
+
+  /* Same browser, other page already set up: adopt its key rather than ask
+     again. Only student-from-admin — a station must not unlock the admin
+     page by itself. */
+  if (!configured() && keyFromOtherPage()) lsSet(KEY_PREFIX + ROLE, keyFromOtherPage());
+
   if (configured()) syncNow();
 
   return {
     role: ROLE, repo: repo, configured: configured, hasEverSynced: hasEverSynced,
+    pairingURL: pairingURL, keyFromOtherPage: keyFromOtherPage, handedOver: () => handedOver,
     status: () => status, describe: describe, pendingChanges: pendingChanges,
     syncNow: syncNow, connect: connect, adopt: adopt, disconnect: disconnect,
     stationOnly: stationOnly,

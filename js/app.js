@@ -133,8 +133,23 @@ function syncSettingsHTML() {
       <button class="btn" data-act="sync-now">Sync now</button>
       <button class="btn btn-quiet" data-act="sync-disconnect">Disconnect this computer</button>
     </div>
-    <p class="hint">Student station: open <code>${esc(location.origin)}/student/</code> on the classroom device and paste the same access key there.
-      A new key (when the old one expires) goes in the box below.</p>
+    <div class="actions"><button class="btn" data-act="pair-show">Set up another device…</button></div>
+    <div id="pair-panel" hidden>
+      <p class="hint">Open one of these links on the other device and it sets itself up — the key never has to be typed again.
+        <strong>Anyone with a link can read and change the library</strong>, so keep them to your own devices and don't post them anywhere.</p>
+      <div class="pair-row">
+        <label class="field"><span>Student station</span><input id="pair-student" readonly value="${esc(Sync.pairingURL('student'))}"></label>
+        <button class="btn" data-act="pair-copy" data-id="student">Copy</button>
+        <button class="btn btn-quiet" data-act="pair-qr" data-id="student">QR</button>
+      </div>
+      <div class="pair-row">
+        <label class="field"><span>This page, on another computer</span><input id="pair-admin" readonly value="${esc(Sync.pairingURL('admin'))}"></label>
+        <button class="btn" data-act="pair-copy" data-id="admin">Copy</button>
+        <button class="btn btn-quiet" data-act="pair-qr" data-id="admin">QR</button>
+      </div>
+      <div class="qr-box" id="pair-qr-box" hidden></div>
+    </div>
+    <p class="hint">When the key expires, paste a new one below on this computer, then re-open the links above on the others.</p>
     <div class="lookup-row">
       <label class="field"><span>Replace access key</span>
         <input id="sync-key" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
@@ -166,6 +181,37 @@ async function connectWithKey(key, btn) {
     toast(e.message, 'error');
   } finally {
     render();
+  }
+}
+
+/* The QR library is only needed on the setup panel, so it loads when asked
+   for and the panel copes without it. */
+let qrLib = null;
+function loadQRLibrary() {
+  if (qrLib) return Promise.resolve(qrLib);
+  return new Promise((resolve, reject) => {
+    const tag = document.createElement('script');
+    tag.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+    tag.onload = () => { qrLib = window.qrcode; qrLib ? resolve(qrLib) : reject(new Error('bad library')); };
+    tag.onerror = () => reject(new Error('offline'));
+    document.head.appendChild(tag);
+  });
+}
+
+async function drawPairingQR(which) {
+  const box = document.getElementById('pair-qr-box');
+  const url = Sync.pairingURL(which);
+  box.hidden = false;
+  box.innerHTML = '<p class="muted small">Making the code…</p>';
+  try {
+    const qrcode = await loadQRLibrary();
+    const qr = qrcode(0, 'L');            // 0 = smallest size that fits
+    qr.addData(url);
+    qr.make();
+    box.innerHTML = `<div class="qr">${qr.createSvgTag({ cellSize: 5, margin: 2 })}</div>
+      <p class="hint">Point the other device's camera at this. It opens the ${which === 'student' ? 'student station' : 'admin page'}, already set up.</p>`;
+  } catch (e) {
+    box.innerHTML = '<p class="hint">The code needs internet to draw. Copy the link instead.</p>';
   }
 }
 
@@ -1485,6 +1531,21 @@ Object.assign(ACTIONS, {
   },
 
   'sync-connect': (id, btn) => connectWithKey(document.getElementById('sync-key').value, btn),
+  'pair-show': () => {
+    const panel = document.getElementById('pair-panel');
+    panel.hidden = !panel.hidden;
+  },
+  'pair-copy': async which => {
+    const input = document.getElementById('pair-' + which);
+    try {
+      await navigator.clipboard.writeText(input.value);
+      toast('Link copied. Open it on the other device.', 'ok');
+    } catch (e) {
+      input.select();
+      toast('Press Cmd+C to copy the selected link.', 'info');
+    }
+  },
+  'pair-qr': which => drawPairingQR(which),
   'sync-now': async (id, btn) => {
     btn.disabled = true;
     await Sync.syncNow();
@@ -1714,3 +1775,6 @@ function loadSampleData() {
 
 render();
 if (route === 'circulation') focusScan();
+
+/* Opened from a pairing link: set this computer up without anyone typing. */
+if (!Sync.configured() && Sync.handedOver()) connectWithKey(Sync.handedOver());
