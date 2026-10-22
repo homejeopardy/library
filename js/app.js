@@ -259,11 +259,13 @@ function circPanelHTML() {
         ${loan.renewals ? `<span class="muted">&middot; renewed ${loan.renewals}&times;</span>` : ''}
       </div>
       ${hold ? `<p class="note">On return, hold it for <strong>${esc((patronById(hold.patronId) || {}).name || '?')}</strong>.</p>` : ''}
+      ${attentionNoteHTML(item)}
       <div class="actions">
         <button class="btn btn-primary" data-act="checkin" data-id="${item.id}" id="primary-action">Check in</button>
         <button class="btn" data-act="renew" data-id="${loan.id}">Renew</button>
         <button class="btn btn-quiet" data-act="hold-for" data-id="${item.id}">Place hold</button>
         <button class="btn btn-quiet" data-act="mark-trouble" data-id="${item.id}">Lost or damaged…</button>
+        <button class="btn btn-quiet" data-act="${item.attention ? 'attention-clear' : 'attention-set'}" data-id="${item.id}">${item.attention ? 'Mark it fixed' : 'Needs attention…'}</button>
         <button class="btn btn-quiet" data-act="clear-desk">Cancel</button>
       </div>
     </div>`;
@@ -274,8 +276,10 @@ function circPanelHTML() {
     ${itemHeadHTML(item)}
     <div class="status-row">
       <span class="badge badge-ok">Available</span>
+      ${item.attention ? '<span class="badge badge-warn">Needs attention</span>' : ''}
       ${hold ? `<span>&middot; held for <strong>${esc((patronById(hold.patronId) || {}).name || '?')}</strong></span>` : ''}
     </div>
+    ${attentionNoteHTML(item)}
     <div class="checkout-row">
       <label class="field">
         <span>Check out to</span>
@@ -289,10 +293,17 @@ function circPanelHTML() {
       <button class="btn btn-primary" data-act="do-checkout" id="primary-action">Check out</button>
       <button class="btn btn-quiet" data-act="hold-for" data-id="${item.id}">Place hold</button>
       <button class="btn btn-quiet" data-act="mark-trouble" data-id="${item.id}">Lost or damaged…</button>
+      <button class="btn btn-quiet" data-act="${item.attention ? 'attention-clear' : 'attention-set'}" data-id="${item.id}">${item.attention ? 'Mark it fixed' : 'Needs attention…'}</button>
       <button class="btn btn-quiet" data-act="clear-desk">Cancel</button>
     </div>
     <p class="hint">${S().autoCreatePatrons ? 'A student who has never borrowed before is added automatically.' : 'New students must be added on the Students tab first.'}</p>
   </div>`;
+}
+
+function attentionNoteHTML(item) {
+  if (!item.attention) return '';
+  return `<p class="note">Needs attention${item.attentionNote ? ': ' + esc(item.attentionNote) : ''}
+    <span class="muted">&middot; ${esc(fmtDate(item.attentionAt))}${item.attentionBy ? ', reported by ' + esc(item.attentionBy) : ''}</span></p>`;
 }
 
 function itemHeadHTML(item) {
@@ -535,6 +546,8 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
         <label><span class="field-label">Genre</span><select name="genre">${genreOptionsHTML(d.genre)}</select></label>
         <p class="genre-hints" id="genre-hints" hidden></p>
       </div>
+      ${item ? `<label class="field"><span>Needs attention</span>
+        <input name="attention" value="${esc(item.attentionNote || '')}" placeholder="${item.attention ? '' : 'e.g. taped spine — leave blank for none'}" autocomplete="off"></label>` : ''}
       ${item ? `<label class="field"><span>Condition</span>
         <select name="status">
           <option value="">On the shelf</option>
@@ -634,6 +647,13 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
       if (!res.ok) { toast(res.error, 'error'); return; }
       const statusSel = get('status');
       if (statusSel && statusSel.value !== (item.status || '')) setItemStatus(item.id, statusSel.value, item.statusNote);
+      const att = get('attention');
+      if (att) {
+        const wanted = att.value.trim();
+        // Any text means it needs attention; clearing the box means it is fixed.
+        if (wanted) setAttention(item.id, true, wanted, item.attentionBy);
+        else if (item.attention) setAttention(item.id, false);
+      }
       toast(item ? 'Saved.' : 'Added "' + res.item.title + '" (' + res.item.barcode + ').', 'ok');
       if (again) {
         openItemModal(null); // starts blank, so the next book gets its own genre suggestions
@@ -853,7 +873,7 @@ function currentCatalogItems() {
   if (ui.catalogFilter === 'out') items = items.filter(i => activeLoanForItem(i.id));
   if (ui.catalogFilter === 'in') items = items.filter(i => !activeLoanForItem(i.id) && !i.status);
   if (ui.catalogFilter === 'overdue') items = items.filter(i => isOverdue(activeLoanForItem(i.id)));
-  if (ui.catalogFilter === 'trouble') items = items.filter(i => i.status);
+  if (ui.catalogFilter === 'trouble') items = items.filter(i => i.status || i.attention);
   if (ui.catalogGenre === '__none__') items = items.filter(i => !i.genre);
   else if (ui.catalogGenre) items = items.filter(i => normName(i.genre) === normName(ui.catalogGenre));
   return items;
@@ -875,7 +895,7 @@ VIEWS.catalog = function () {
         ${untagged ? `<option value="__none__" ${ui.catalogGenre === '__none__' ? 'selected' : ''}>No genre yet (${untagged})</option>` : ''}
       </select>
       <div class="chips" role="group" aria-label="Filter">
-        ${[['all', 'All'], ['in', 'On the shelf'], ['out', 'Checked out'], ['overdue', 'Overdue'], ['trouble', 'Lost or damaged']].map(([k, label]) =>
+        ${[['all', 'All'], ['in', 'On the shelf'], ['out', 'Checked out'], ['overdue', 'Overdue'], ['trouble', 'Needs a look']].map(([k, label]) =>
           `<button class="chip ${ui.catalogFilter === k ? 'active' : ''}" data-act="cat-filter" data-id="${k}">${label}</button>`).join('')}
       </div>
       <span class="spacer"></span>
@@ -897,7 +917,8 @@ VIEWS.catalog = function () {
             <td><button class="link strong" data-act="desk-item" data-id="${i.id}">${esc(i.title)}</button>
                 ${waiting ? `<span class="pill">${waiting} waiting</span>` : ''}
                 <div class="mono small muted">${esc(i.barcode)}</div>
-                ${ratingLineHTML(i)}</td>
+                ${ratingLineHTML(i)}
+                ${i.attention && !i.status ? `<div class="small"><span class="badge badge-warn">Needs attention</span></div>` : ''}</td>
             <td>${esc(i.author || '—')}</td>
             <td>${i.genre ? `<button class="genre-tag" data-act="cat-genre" data-id="${esc(i.genre)}">${esc(i.genre)}</button>` : '<span class="muted">—</span>'}</td>
             <td>${i.status
@@ -1039,6 +1060,7 @@ VIEWS.reports = function () {
       ${tile(recentCheckouts, 'checkouts, 30 days')}
       ${tile(openHolds().length, 'open holds')}
       ${tile(troubledItems().length, 'lost or damaged', troubledItems().length ? 'danger' : '')}
+      ${tile(attentionItems().length, 'need attention')}
     </div>
 
     <h2 class="section-title">Overdue <button class="btn btn-quiet" data-act="print-notices" ${over.length ? '' : 'disabled'}>Print notices</button></h2>
@@ -1078,6 +1100,19 @@ VIEWS.reports = function () {
         <td class="muted small">${esc(fmtDate(i.statusAt))}</td>
         <td class="muted small">${esc(i.statusWith || '—')}</td>
         <td class="row-actions"><button class="link" data-act="unmark" data-id="${i.id}">Back on the shelf</button></td>
+      </tr>`).join('')}</tbody>
+    </table>` : ''}
+
+    ${attentionItems().length ? `<h2 class="section-title">Needs attention</h2>
+    <p class="hint">These still go out as normal — this is just a list of what wants doing.</p>
+    <table class="table">
+      <thead><tr><th>Book</th><th>What needs doing</th><th>Since</th><th></th></tr></thead>
+      <tbody>${attentionItems().map(i => `<tr>
+        <td><button class="link strong" data-act="desk-item" data-id="${i.id}">${esc(i.title)}</button>
+            <div class="mono small muted">${esc(i.barcode)}</div></td>
+        <td>${esc(i.attentionNote || '—')}${i.attentionBy ? `<div class="muted small">reported by ${esc(i.attentionBy)}</div>` : ''}</td>
+        <td class="muted small">${esc(fmtDate(i.attentionAt))}</td>
+        <td class="row-actions"><button class="link" data-act="attention-clear" data-id="${i.id}">Mark it fixed</button></td>
       </tr>`).join('')}</tbody>
     </table>` : ''}
 
@@ -1332,6 +1367,19 @@ Object.assign(ACTIONS, {
   'hold-for': itemId => openHoldModal(itemId),
 
   'mark-trouble': itemId => openTroubleModal(itemId),
+  'attention-set': itemId => {
+    const item = itemById(itemId);
+    const note = prompt('What needs doing to "' + item.title + '"?', item.attentionNote || '');
+    if (note === null) return;
+    setAttention(itemId, true, note);
+    toast('Added to the attention list.', 'ok');
+    if (route === 'circulation') resetCirc(); else render();
+  },
+  'attention-clear': itemId => {
+    setAttention(itemId, false);
+    toast('Marked fixed.', 'ok');
+    if (route === 'circulation') resetCirc(); else render();
+  },
   'unmark': itemId => {
     const res = setItemStatus(itemId, '');
     if (!res.ok) { toast(res.error, 'error'); return; }

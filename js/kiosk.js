@@ -290,6 +290,48 @@ function ratePromptHTML(item) {
   </div>`;
 }
 
+/* What to read next, offered at the one moment a student is between books. */
+function alsoLikedHTML(item) {
+  const picks = similarBooks(item.id, K.student.id, 3);
+  if (!picks.length) return '';
+  const sameGenre = item.genre && picks.every(p => normName(p.item.genre) === normName(item.genre));
+  return `<div class="k-also">
+    <span class="k-also-head">${sameGenre ? 'More ' + esc(item.genre) + ' on the shelf' : 'On the shelf right now'}</span>
+    <ul class="k-list">${picks.map(p => `<li>${coverImg(p.item)}<span class="k-list-text">
+      <strong>${esc(p.item.title)}</strong>
+      <span class="muted">${esc(p.item.author || '')}</span>
+      ${p.rating ? `<span class="k-rating">${starsHTML(p.rating.avg)} <span class="muted">${p.rating.avg.toFixed(1)} from ${plural(p.rating.count, 'reader')}</span></span>`
+                 : '<span class="muted">No ratings yet — be the first</span>'}
+      ${p.item.genre ? `<span class="muted">Look in <strong>${esc(p.item.genre)}</strong></span>` : ''}
+    </span></li>`).join('')}</ul>
+  </div>`;
+}
+
+/* Students notice damage before anyone else does; this puts it on the
+   teacher's list without taking the book out of circulation. */
+function reportProblemHTML(item) {
+  return `<div class="k-report" data-item="${item.id}">
+    <button type="button" class="link" data-report="1">Something's wrong with this book</button>
+  </div>`;
+}
+
+function wireReport(box) {
+  const row = box.querySelector('.k-report');
+  if (!row) return;
+  const btn = row.querySelector('[data-report]');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const item = itemById(row.dataset.item);
+    row.innerHTML = `<span class="k-report-ask">What's wrong with it?</span>
+      <span class="k-report-opts">${['Pages torn or missing', 'Cover damaged', 'Something spilled on it', 'Something else']
+        .map(w => `<button type="button" class="btn" data-why="${esc(w)}">${esc(w)}</button>`).join('')}</span>`;
+    row.querySelectorAll('[data-why]').forEach(b => b.addEventListener('click', () => {
+      setAttention(item.id, true, b.dataset.why, K.student.name);
+      row.innerHTML = '<span class="k-report-ask">Thanks for telling us — your teacher will take a look.</span>';
+    }));
+  });
+}
+
 function wireRating(box) {
   const row = box.querySelector('.k-rate');
   if (!row) return;
@@ -348,7 +390,8 @@ function studentScan(v) {
     const res = checkin(item.id);
     if (!res.ok) { showResult('warn', esc(res.error)); return; }
     kRender();
-    showResult('ok', returnedMessage(item, res) + ratePromptHTML(item), '', wireRating);
+    showResult('ok', returnedMessage(item, res) + ratePromptHTML(item) + reportProblemHTML(item) + alsoLikedHTML(item),
+      '', box => { wireRating(box); wireReport(box); });
     return;
   }
 

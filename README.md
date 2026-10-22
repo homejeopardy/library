@@ -42,6 +42,10 @@ library, kept in a private GitHub repository.
   stops being checked out, and shows in Reports with who had it last.
 - **Star ratings** — students rate a book out of five as they return it at the station.
   Averages show in the catalog, in student search, and in Reports.
+- **Needs attention** — a repair list. The book still goes out as normal; students can add
+  to the list themselves when they return something with a torn page.
+- **What to read next** — returning a book at the station suggests others in the same
+  genre that are on the shelf right now, best rated first.
 - **Undo** — the last few desk actions can be reversed with one click.
 - **Exports** — catalog and loan history as CSV, plus a full JSON backup.
 
@@ -204,6 +208,27 @@ remembers who had it last.
 A marked book stays in the catalog with all its history. It will not be checked out (the
 desk can still override), will not fill a hold, and the student station tells anyone who
 scans it to give it to you. **Back on the shelf** undoes all of that.
+
+## Needs attention
+
+Lighter than lost or damaged: the book still lends normally, it just wants taping,
+re-covering or replacing before long. Flag it from the circulation desk, from a book's
+Edit dialog (type what needs doing; clear the box when it's done), or from
+**Reports → Needs attention**, which lists everything outstanding with a **Mark it fixed**
+button.
+
+Students can add to the list too. When they return a book at the station there's a
+**Something's wrong with this book** link; they pick from four plain options, and it lands
+on your list with their name and the date. The book keeps circulating meanwhile.
+
+The catalog's **Needs a look** filter covers all three: lost, damaged, and needs attention.
+
+## What to read next
+
+When a student returns a book at the station, up to three suggestions appear underneath:
+same genre, on the shelf right now, nothing they have borrowed before, best rated first.
+A tie goes to whichever has gone out least, so a good book nobody has tried gets a turn.
+If the genre has nothing left to offer, it falls back to the whole collection.
 
 ## Star ratings
 

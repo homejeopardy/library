@@ -518,6 +518,27 @@ function setItemStatus(itemId, status, note) {
   return { ok: true, item: item, closedLoan: !!loan, holder: holder };
 }
 
+/* A lighter flag than lost or damaged: the book still lends fine, it just
+   needs something doing — taping, a new cover, replacing before long. It
+   never blocks anything; it is a to-do list. */
+function setAttention(itemId, on, note, by) {
+  const item = itemById(itemId);
+  if (!item) return { ok: false, error: 'Item not found.' };
+  if (!on) {
+    delete item.attention; delete item.attentionNote; delete item.attentionAt; delete item.attentionBy;
+  } else {
+    item.attention = true;
+    item.attentionAt = nowISO();
+    if (note != null) item.attentionNote = String(note).trim();
+    if (by) item.attentionBy = String(by);
+  }
+  saveDB();
+  return { ok: true, item: item };
+}
+
+const attentionItems = () => DB.items.filter(i => i.attention && !i.status)
+  .sort((a, b) => new Date(b.attentionAt || 0) - new Date(a.attentionAt || 0));
+
 const troubledItems = () => DB.items.filter(i => i.status).sort((a, b) => new Date(b.statusAt || 0) - new Date(a.statusAt || 0));
 
 /* --- what students thought --- */
@@ -542,6 +563,28 @@ function rateItem(itemId, patronId, stars) {
   else { review = { id: uid('rev'), itemId: itemId, patronId: patronId, stars: n, at: nowISO() }; DB.reviews.push(review); }
   saveDB();
   return { ok: true, review: review };
+}
+
+/* Books to suggest to a student who has just finished one: same genre,
+   on the shelf right now, and nothing they have borrowed before. Best
+   rated first, then whatever has gone out least — so a good book nobody
+   has tried yet gets a turn. */
+function similarBooks(itemId, patronId, max) {
+  const item = itemById(itemId);
+  if (!item) return [];
+  const read = new Set(patronId ? loansForPatron(patronId).map(l => l.itemId) : []);
+  const timesOut = {};
+  DB.loans.forEach(l => { timesOut[l.itemId] = (timesOut[l.itemId] || 0) + 1; });
+  const free = i => !i.status && i.id !== itemId && !read.has(i.id) && !activeLoanForItem(i.id);
+  const sameGenre = item.genre ? DB.items.filter(i => free(i) && normName(i.genre) === normName(item.genre)) : [];
+  const pool = sameGenre.length ? sameGenre : DB.items.filter(free);
+  return pool
+    .map(i => ({ item: i, rating: itemRating(i.id) }))
+    .sort((a, b) =>
+      (b.rating ? b.rating.avg : 0) - (a.rating ? a.rating.avg : 0) ||
+      (timesOut[a.item.id] || 0) - (timesOut[b.item.id] || 0) ||
+      byTitle(a.item, b.item))
+    .slice(0, max || 3);
 }
 
 /* --- genres --- */
