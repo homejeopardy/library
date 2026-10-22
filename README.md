@@ -157,16 +157,9 @@ next ISBN, and suggests a genre for that book.
 
 ## Printing spine labels
 
-**Catalog → Print labels.** Each label is 0.66&Prime; wide and 1.4&Prime; tall. Down the left:
-the genre picture, the genre name in small type, the first three letters of the title in
-large type, and the book's barcode number. Up the right edge: a scannable Code 39 barcode
-of that same number, so a book can be checked out straight off the shelf.
-
-The barcode runs along the **long** edge on purpose. Across the 0.66&Prime; width its bars
-would be about 4 thousandths of an inch — finer than a classroom printer holds or a cheap
-scanner reads. Lengthways they are about 8.7 thousandths, which is comfortable. Print at
-**actual size** (not "fit to page" or "shrink to fit") or the bars shrink below what
-scanners can read.
+**Catalog → Print labels.** Each label is 0.66&Prime; wide and 1&Prime; tall, and carries, top to
+bottom: the genre picture, the genre name in small type, the first three letters of the
+title in large type, and the book's barcode number.
 
 The three letters skip the small words a library files past — *The Lion, the Witch and the
 Wardrobe* becomes `LIO`, *Of Mice and Men* becomes `MIC`. Two books can end up with the
@@ -174,13 +167,9 @@ same letters; the barcode number underneath tells them apart.
 
 **Printing:** choose the books currently listed in the catalog (so the search box and the
 genre filter decide what you get) or every book. Print onto full-sheet label paper — 11
-labels across, 7 down, 77 to a sheet — and cut along the hairline guides. Labels sit
+labels across, 10 down, 110 to a sheet — and cut along the hairline guides. Labels sit
 edge to edge, so one pass with a paper trimmer cuts both neighbours. To use the rest of a
 part-cut sheet, set **skip this many spaces**.
-
-Code 39 carries letters, digits and `-`, needs no check digit, and every scanner reads it
-without being configured. A barcode too long to print legibly at this size — more than
-about ten characters — falls back to the number alone, and the dialog says which books.
 
 **Books with no genre** print without a picture. The dialog offers to guess them from
 their ISBNs; anything it fills in is marked as a guess, so it's worth a look in the
@@ -261,7 +250,6 @@ js/util.js          dates, formatting, CSV, toasts
 js/store.js         the data model and every rule (loans, holds, limits, merges, backup)
 js/sync.js          GitHub sync: fetch, three-way merge, write, retry
 js/genre-art.js     the genre drawings, inlined for printing
-js/barcode.js       Code 39 barcodes, drawn as SVG
 js/kiosk.js         the student page
 js/lookup.js    ISBN → book data (Open Library, then Google Books), and genre hints
 js/app.js           admin page: routing, views, and the circulation desk
