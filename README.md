@@ -74,9 +74,32 @@ Each device keeps its own working copy in the browser, so the app is instant and
 working when the Wi-Fi drops.
 
 - **Without sync**, that copy is the only one. It doesn't follow you to another computer,
-  clearing browsing data erases it, and **Settings → Download backup** is your safety net.
+  clearing browsing data erases it for good, and **Settings → Download backup** is your
+  only safety net.
 - **With sync**, every change also goes to two files in a private GitHub repository, and
   every device picks up the others' changes. GitHub keeps every earlier version.
+
+### If a browser's data is cleared
+
+No website can survive this on its own: **clearing "cookies and other site data" empties
+everything a page has stored**, in every browser, by design. What differs is how much work
+it is to get back.
+
+- **Clearing only the cache changes nothing.** Cached files and site data are separate
+  boxes in every browser's dialog; the library lives in the second one.
+- **With sync on, the books are never at risk** — they are in GitHub too, with history.
+  A cleared browser loses its copy and forgets the key, and both come back the moment you
+  open a setup link.
+- **Keep a way back in.** Any one of these is enough, and all three are free:
+  - let your browser **save the key** when it offers — saved passwords are kept separately
+    from site data and survive the clear;
+  - **bookmark** a setup link from **Set up another device**;
+  - press **File** there to save a small `open-classroom-library.html`. Keep it in
+    Documents; double-clicking it opens the app already set up. It holds the key, so keep
+    it off shared drives.
+- The app also asks the browser to mark the library as **persistent storage**, which stops
+  it being tidied away automatically when disk runs short. Settings says whether the
+  browser agreed. That is separate from a deliberate clear, which nothing can prevent.
 
 ## Syncing across devices
 

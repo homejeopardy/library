@@ -121,11 +121,9 @@ function syncSettingsHTML() {
     <p class="hint">Keep this library the same on every computer and on the student station. The data is saved to a
       <strong>private</strong> GitHub repository, <code>${esc(Sync.repo())}</code>.
       <a href="https://github.com/homejeopardy/library#syncing-across-devices" target="_blank" rel="noopener">Setup steps</a></p>
-    <div class="lookup-row">
-      <label class="field"><span>GitHub access key</span>
-        <input id="sync-key" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
-      <button class="btn btn-primary" data-act="sync-connect">Connect</button>
-    </div>`;
+    ${keyFormHTML('Connect', true)}
+    <p class="hint">Let your browser save the key when it offers. Saved passwords survive clearing
+      cookies and site data, so you can get back in with one click.</p>`;
   return `
     <p>Connected to <code>${esc(Sync.repo())}</code>.</p>
     <p class="sync-line" id="sync-status-line">${syncStatusLine()}</p>
@@ -141,20 +139,54 @@ function syncSettingsHTML() {
         <label class="field"><span>Student station</span><input id="pair-student" readonly value="${esc(Sync.pairingURL('student'))}"></label>
         <button class="btn" data-act="pair-copy" data-id="student">Copy</button>
         <button class="btn btn-quiet" data-act="pair-qr" data-id="student">QR</button>
+        <button class="btn btn-quiet" data-act="pair-file" data-id="student">File</button>
       </div>
       <div class="pair-row">
         <label class="field"><span>This page, on another computer</span><input id="pair-admin" readonly value="${esc(Sync.pairingURL('admin'))}"></label>
         <button class="btn" data-act="pair-copy" data-id="admin">Copy</button>
         <button class="btn btn-quiet" data-act="pair-qr" data-id="admin">QR</button>
+        <button class="btn btn-quiet" data-act="pair-file" data-id="admin">File</button>
       </div>
       <div class="qr-box" id="pair-qr-box" hidden></div>
     </div>
     <p class="hint">When the key expires, paste a new one below on this computer, then re-open the links above on the others.</p>
+    ${keyFormHTML('Update key', false)}`;
+}
+
+/* A proper sign-in form: a password manager will only offer to remember a
+   password field that lives in a form with a username beside it. What it
+   saves then outlives any clearing of site data. */
+function keyFormHTML(buttonLabel, primary) {
+  return `<form class="key-form" autocomplete="on">
+    <input class="sr-only" type="text" name="username" value="Classroom Library key"
+           autocomplete="username" readonly tabindex="-1" aria-hidden="true">
     <div class="lookup-row">
-      <label class="field"><span>Replace access key</span>
-        <input id="sync-key" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
-      <button class="btn" data-act="sync-connect">Update key</button>
-    </div>`;
+      <label class="field"><span>GitHub access key</span>
+        <input id="sync-key" name="password" type="password" autocomplete="current-password"
+               spellcheck="false" placeholder="github_pat_…"></label>
+      <button type="submit" class="btn ${primary ? 'btn-primary' : ''}">${esc(buttonLabel)}</button>
+    </div>
+  </form>`;
+}
+
+/* Ask the browser to treat this library as worth keeping. It stops the
+   routine tidying-up browsers do when disk runs short; it does not, and
+   cannot, survive someone deliberately clearing site data. */
+async function requestPersistence() {
+  try {
+    if (navigator.storage && navigator.storage.persist) return await navigator.storage.persist();
+  } catch (e) { /* not supported */ }
+  return false;
+}
+
+async function showPersistence() {
+  const el = document.getElementById('persist-line');
+  if (!el) return;
+  let persisted = null;
+  try { if (navigator.storage && navigator.storage.persisted) persisted = await navigator.storage.persisted(); } catch (e) { /* ignore */ }
+  el.textContent = persisted
+    ? 'This browser has marked the library as worth keeping, so it will not be tidied away when disk runs short.'
+    : 'This browser has not marked the library as protected storage. Installing the app, or bookmarking it, usually persuades it to.';
 }
 
 /* Shared by the Settings button and the station lock screen. */
@@ -174,6 +206,7 @@ async function connectWithKey(key, btn) {
       if (!keepBoth) toast('This computer\'s old library was downloaded as a backup file, just in case.', 'info');
     }
     await Sync.syncNow();
+    requestPersistence();
     const st = Sync.status();
     if (st.state === 'error' || st.state === 'offline') toast(st.detail, 'error');
     else toast('Connected — this computer now syncs with the shared library.', 'ok');
@@ -220,16 +253,14 @@ function renderStationLock() {
   <section class="pane narrow station-lock">
     <h2>This computer is the student station</h2>
     <p>Students use <a href="student/">the student page</a>. To run the admin page here, paste the GitHub access key.</p>
-    <div class="lookup-row">
-      <label class="field"><span>GitHub access key</span>
-        <input id="sync-key" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
-      <button class="btn btn-primary" id="unlock">Unlock</button>
-    </div>
+    ${keyFormHTML('Unlock', true)}
   </section>`;
+  const form = view.querySelector('.key-form');
   const input = document.getElementById('sync-key');
-  const btn = document.getElementById('unlock');
-  btn.addEventListener('click', () => connectWithKey(input.value, btn));
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') connectWithKey(input.value, btn); });
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    connectWithKey(input.value, form.querySelector('button[type="submit"]'));
+  });
   input.focus();
 }
 
@@ -1274,8 +1305,9 @@ VIEWS.settings = function () {
 
     <h2 class="section-title">Backup</h2>
     <p class="hint">${Sync.configured()
-      ? 'The shared library keeps every earlier version in its GitHub history, so a backup file is an extra safety net rather than the only one.'
-      : 'Everything lives in this browser on this computer. Export a backup regularly — and always before clearing browsing data or switching machines.'}</p>
+      ? 'The books themselves are safe: they live in GitHub as well as here, with every earlier version kept. Clearing this browser\'s cookies and site data empties its copy and forgets the key — opening your saved setup link or recovery file brings both straight back. (Clearing only the <em>cache</em> changes nothing.)'
+      : 'Everything lives in this browser on this computer, and clearing cookies and site data erases it for good. Turn on sync above, or export a backup regularly — and always before clearing browsing data or switching machines.'}</p>
+    <p class="hint" id="persist-line"></p>
     <div class="actions">
       <button class="btn" data-act="export-json">Download backup</button>
       <button class="btn" data-act="import-json">Restore from backup…</button>
@@ -1292,8 +1324,11 @@ VIEWS.settings = function () {
 };
 
 AFTER.settings = function () {
-  const key = document.getElementById('sync-key');
-  if (key) key.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ACTIONS['sync-connect'](null, view.querySelector('[data-act="sync-connect"]')); } });
+  showPersistence();
+  view.querySelectorAll('.key-form').forEach(form => form.addEventListener('submit', e => {
+    e.preventDefault();
+    connectWithKey(form.querySelector('#sync-key').value, form.querySelector('button[type="submit"]'));
+  }));
   document.getElementById('new-genre').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); ACTIONS['genre-add'](); }
   });
@@ -1546,6 +1581,23 @@ Object.assign(ACTIONS, {
     }
   },
   'pair-qr': which => drawPairingQR(which),
+  'pair-file': which => {
+    const url = Sync.pairingURL(which);
+    const label = which === 'student' ? 'the student station' : 'the library';
+    download('open-' + (which === 'student' ? 'student-station' : 'classroom-library') + '.html',
+      `<!doctype html>
+<meta charset="utf-8">
+<title>Open ${esc(label)}</title>
+<meta http-equiv="refresh" content="0;url=${esc(url)}">
+<body style="font: 16px/1.6 system-ui, sans-serif; padding: 40px; max-width: 34em">
+<h1 style="font-size: 20px">Opening ${esc(label)}…</h1>
+<p><a href="${esc(url)}">Open it now</a> if nothing happens by itself.</p>
+<p style="color: #777">Double-clicking this file opens your library and sets this computer up again —
+useful if its browser data is ever cleared. It carries the key to your library, so keep it off
+shared drives and out of the hands of students.</p>
+`, 'text/html');
+    toast('Saved. Keep it somewhere safe — double-click it to get back in.', 'ok');
+  },
   'sync-now': async (id, btn) => {
     btn.disabled = true;
     await Sync.syncNow();

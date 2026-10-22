@@ -43,9 +43,14 @@ function screenSetup(message) {
     <p>Teacher: on the computer that runs the library, go to <strong>Settings → Sync across devices →
       Set up another device</strong> and open the student station link here. Nothing needs typing.</p>
     <p class="hint">Or paste the access key by hand. Students never see it.</p>
-    <label class="field"><span>GitHub access key</span>
-      <input id="k-key" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
-    <div class="actions"><button class="btn btn-primary" id="k-connect">Connect</button></div>
+    <form class="key-form" autocomplete="on" id="k-form">
+      <input class="sr-only" type="text" name="username" value="Classroom Library key"
+             autocomplete="username" readonly tabindex="-1" aria-hidden="true">
+      <label class="field"><span>GitHub access key</span>
+        <input id="k-key" name="password" type="password" autocomplete="current-password"
+               spellcheck="false" placeholder="github_pat_…"></label>
+      <div class="actions"><button type="submit" class="btn btn-primary" id="k-connect">Connect</button></div>
+    </form>
     <p class="danger" id="k-setup-msg">${esc(message || '')}</p>
   </section>`;
   const input = document.getElementById('k-key');
@@ -62,13 +67,13 @@ function screenSetup(message) {
       await Sync.syncNow();
       const st = Sync.status();
       if (st.state !== 'ok') throw new Error(st.detail);
+      try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (err) { /* not supported */ }
       kRender();
     } catch (e) {
       screenSetup(e.message);
     }
   };
-  btn.addEventListener('click', () => go());
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  document.getElementById('k-form').addEventListener('submit', e => { e.preventDefault(); go(); });
   // Arrived from a pairing link: connect without anyone touching the keyboard.
   if (Sync.handedOver()) go(Sync.handedOver(), btn);
   else input.focus();
