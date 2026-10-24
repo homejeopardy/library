@@ -343,15 +343,25 @@ then printed an empty job. A plain page avoids the question.
 
 ### The font on paper
 
-Anything printed uses Helvetica, never the monospace face the app uses on screen.
-The system monospace faces (Menlo and its kin) embed into a print job in a way some
-printers cannot rasterise: the printer accepts the job, clicks, reports it complete,
-and produces nothing. It fails the same way from any app, because the font travels
-inside the document — a PDF saved from the app failed to print from Preview too.
+Anything printed is set in **Monaco**, not the monospace face the app uses on screen.
+**Menlo** embeds into a print job in a way at least one printer cannot rasterise: it
+accepts the job, clicks, reports it **complete**, and produces nothing. It fails the
+same way from any app, because the font travels inside the document — a PDF saved from
+the app would not print from Preview either.
 
-The swap is one line in the print rules (`:root { --mono: ... }`), so if a label or a
-shelf card ever needs the typewriter look back, change it there and test on paper
-before trusting it.
+Monaco, Courier New, Courier and Andale Mono were each tested on that printer and all
+come out, so the fault is Menlo in particular rather than monospace in general.
+
+The swap is one line in the print rules:
+
+```css
+@media print { :root { --mono: Monaco, "Courier New", Courier, monospace; } }
+```
+
+The generic `monospace` is last, and only after names known to print, because on a Mac
+it resolves to Menlo — dropping the tested names would quietly bring the fault back.
+Test any change to that line on paper, not in print preview: the preview renders on the
+Mac, where Menlo is perfectly fine, so it always looks right.
 
 Two things follow:
 

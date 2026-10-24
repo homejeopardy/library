@@ -2198,7 +2198,7 @@ ${sheets.map(href => `<link rel="stylesheet" href="${esc(href)}">`).join('\n')}
 <style>
   /* This page is nothing but the sheet, so it looks on screen as it will on paper —
      including the monospace swap, so what you see here is what comes out. */
-  :root { --mono: Helvetica, Arial, sans-serif; }
+  :root { --mono: Monaco, "Courier New", Courier, monospace; }
   body { margin: 0; padding: 0.25in; background: #fff; color: #000; }
   .print-tip { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: #444; background: #f3f3f3; border-radius: 6px; padding: 8px 12px; margin: 0 0 14px; }

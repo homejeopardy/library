@@ -733,10 +733,12 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 @page { size: letter; margin: 0.5in; }
 
 @media print {
-  /* The system monospace faces — Menlo and its kin — embed into a print job in a way
-     some printers can't rasterise: the job is accepted, the printer clicks, and nothing
-     comes out. Everything on paper uses a face that is known to come through. */
-  :root { --mono: Helvetica, Arial, sans-serif; }
+  /* Menlo embeds into a print job in a way at least one printer can't rasterise: the
+     job is accepted, the printer clicks, it reports complete, and nothing comes out.
+     Monaco, Courier New, Courier and Andale Mono were all tested on that printer and
+     all come out. The generic `monospace` is deliberately last and preceded by tested
+     names, because on a Mac it resolves to Menlo and would bring the fault back. */
+  :root { --mono: Monaco, "Courier New", Courier, monospace; }
   .topbar, .toasts, #modal { display: none !important; }
   .view { display: none !important; }
   .print-hint { max-width: 5in; }
