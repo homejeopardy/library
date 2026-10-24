@@ -803,6 +803,7 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
       ${field('Cover image URL', 'cover', d.cover)}
     </div>
     <label class="field"><span>Notes</span><textarea name="notes" rows="2">${esc(d.notes)}</textarea></label>
+    ${item && item.labeledAt ? `<p class="hint">A spine label was printed for this on ${esc(fmtDateFull(item.labeledAt))}.</p>` : ''}
     ${item && itemRating(item.id) ? `<p class="hint">Students rated this ${starsHTML(itemRating(item.id).avg)} ${itemRating(item.id).avg.toFixed(1)} from ${plural(itemRating(item.id).count, 'rating')}.</p>` : ''}
     <div class="actions">
       <button type="button" class="btn btn-primary" id="save-item">${item ? 'Save changes' : 'Add to collection'}</button>
@@ -1145,6 +1146,7 @@ VIEWS.catalog = function () {
       <span class="spacer"></span>
       <button class="btn btn-primary" data-act="new-item">Add a book</button>
       <button class="btn btn-quiet" data-act="print-labels">Print labels</button>
+      ${lastLabelled.length ? `<button class="btn btn-quiet" data-act="unmark-labelled">Undo “marked as labelled”</button>` : ''}
       <button class="btn btn-quiet" data-act="print-shelflist">Print list</button>
     </div>
     ${items.length ? `
@@ -1824,6 +1826,14 @@ shared drives and out of the hands of students.</p>
 
   'print-notices': () => printOverdueNotices(),
   'print-labels': () => openLabelsModal(),
+  'unmark-labelled': () => {
+    if (!lastLabelled.length) { toast('Nothing to undo.', 'error'); return; }
+    const n = lastLabelled.length;
+    markLabelled(lastLabelled, false);
+    lastLabelled = [];
+    toast(plural(n, 'book') + ' no longer counted as labelled.', 'ok');
+    render();
+  },
   'print-shelflist': () => printShelfList()
 });
 
@@ -1898,6 +1908,9 @@ const LABELS_PER_ROW = 11;
 
 /* The order labels come off the sheet should match the order the books are
    stacked when you sit down to stick them on. */
+/* The last batch marked as printed, so a jammed printer is one click to undo. */
+let lastLabelled = [];
+
 const LABEL_ORDERS = [
   ['barcode', 'Barcode number — the order you catalogued them',
     (a, b) => normCode(a.barcode).localeCompare(normCode(b.barcode), undefined, { numeric: true })],
@@ -1969,18 +1982,24 @@ function openLabelsModal() {
   const listed = currentCatalogItems();
   const scopes = [
     ['listed', 'The ' + plural(listed.length, 'book') + ' listed in the catalog now', listed],
+    ['unlabelled', 'Books with no label printed yet (' + unlabelledItems().length + ')', unlabelledItems()],
     ['all', 'Every book (' + DB.items.length + ')', DB.items.slice()]
   ];
 
-  function draw(scopeKey, skip, summary, orderKey, fromText, toText, splitByGenre) {
+  function draw(scopeKey, skip, summary, orderKey, fromText, toText, splitByGenre, since, mark) {
     const scope = scopes.find(x => x[0] === scopeKey) || scopes[0];
     const order = LABEL_ORDERS.find(o => o[0] === orderKey) || LABEL_ORDERS[0];
-    const inRange = withinBarcodeRange(scope[2], fromText, toText);
+    const pool = since ? scope[2].filter(i => (i.addedAt || '') >= since) : scope[2];
+    const inRange = withinBarcodeRange(pool, fromText, toText);
     const items = inRange.slice().sort(order[2]);
     const backwards = barcodeNumber(fromText) !== null && barcodeNumber(toText) !== null
       && barcodeNumber(fromText) > barcodeNumber(toText);
     const missing = items.filter(i => !i.genre).length;
     openModal('Print spine labels', `
+      ${labelPresets().length ? `<div class="preset-row">
+        <span class="muted small">Saved:</span>
+        ${labelPresets().map(p => `<button type="button" class="chip" data-preset="${esc(p.name)}">${esc(p.name)}</button>`).join('')}
+      </div>` : ''}
       <label class="field"><span>Which books</span>
         <select name="scope">${scopes.map(x => `<option value="${x[0]}" ${x[0] === scopeKey ? 'selected' : ''}>${esc(x[1])}</option>`).join('')}</select>
       </label>
@@ -1988,10 +2007,12 @@ function openLabelsModal() {
         ${field('Barcodes from', 'from', fromText || '', { placeholder: 'first' })}
         ${field('up to and including', 'to', toText || '', { placeholder: 'last' })}
       </div>
+      <label class="field"><span>Only books added on or after</span>
+        <input name="since" type="date" value="${esc(since || '')}"></label>
       <p class="hint" id="range-note">${backwards
         ? 'The first number is higher than the second.'
-        : (barcodeNumber(fromText) !== null || barcodeNumber(toText) !== null)
-          ? esc(plural(items.length, 'book') + ' of the ' + scope[2].length + ' selected fall in that range.')
+        : (barcodeNumber(fromText) !== null || barcodeNumber(toText) !== null || since)
+          ? esc(plural(items.length, 'book') + ' of the ' + scope[2].length + ' selected match.')
           : 'Leave these blank for all of them, or set one end to run from or up to a number.'}</p>
       <label class="field"><span>In what order</span>
         <select name="order">${LABEL_ORDERS.map(o => `<option value="${o[0]}" ${o[0] === order[0] ? 'selected' : ''}>${esc(o[1])}</option>`).join('')}</select>
@@ -2009,8 +2030,13 @@ function openLabelsModal() {
         <button type="button" class="btn" id="guess-genres">Guess from the internet</button></p>` : ''}
       <h3 class="section-title">How they will print — actual size</h3>
       <div class="label-preview">${items.slice(0, 5).map(labelHTML).join('') || '<p class="muted">No books to label.</p>'}</div>
+      <label class="check">
+        <input type="checkbox" name="mark" ${mark === false ? '' : 'checked'}>
+        <span>Remember that these have been printed, so later runs can skip them</span>
+      </label>
       <div class="actions">
         <button type="button" class="btn btn-primary" id="do-print" ${items.length ? '' : 'disabled'}>Print ${plural(items.length, 'label')}</button>
+        <button type="button" class="btn" id="save-preset">Save these settings…</button>
         <button type="button" class="btn btn-quiet" data-close>Cancel</button>
       </div>
       <p class="hint">Print onto full-sheet label paper, then cut along the guide lines.
@@ -2024,9 +2050,32 @@ function openLabelsModal() {
       const fromInput = body.querySelector('[name="from"]');
       const toInput = body.querySelector('[name="to"]');
       const splitBox = body.querySelector('[name="split"]');
+      const sinceInput = body.querySelector('[name="since"]');
+      const markBox = body.querySelector('[name="mark"]');
+      const settingsNow = () => ({
+        scope: scopeSel.value, order: orderSel.value, from: fromInput.value, to: toInput.value,
+        since: sinceInput.value, split: splitBox ? splitBox.checked : splitByGenre, mark: markBox.checked
+      });
       const redraw = () => draw(scopeSel.value, Math.max(0, Number(skipInput.value) || 0), summary,
-        orderSel.value, fromInput.value, toInput.value, splitBox ? splitBox.checked : splitByGenre);
+        orderSel.value, fromInput.value, toInput.value, splitBox ? splitBox.checked : splitByGenre,
+        sinceInput.value, markBox.checked);
       if (splitBox) splitBox.addEventListener('change', redraw);
+      sinceInput.addEventListener('change', redraw);
+
+      body.querySelectorAll('[data-preset]').forEach(btn => btn.addEventListener('click', () => {
+        const p = labelPresets().find(x => normName(x.name) === normName(btn.dataset.preset));
+        if (!p) return;
+        draw(p.scope, Math.max(0, Number(skipInput.value) || 0), '', p.order, p.from, p.to, p.split, p.since, p.mark);
+      }));
+
+      body.querySelector('#save-preset').addEventListener('click', () => {
+        const name = prompt('Call these settings what?', 'New books by barcode');
+        if (name === null) return;
+        const res = saveLabelPreset(name, settingsNow());
+        if (!res.ok) { toast(res.error, 'error'); return; }
+        toast('Saved as "' + res.name + '". It will be waiting next time.', 'ok');
+        redraw();
+      });
       scopeSel.addEventListener('change', redraw);
       skipInput.addEventListener('change', redraw);
       orderSel.addEventListener('change', redraw);
@@ -2050,11 +2099,19 @@ function openLabelsModal() {
       });
       body.querySelector('#do-print').addEventListener('click', () => {
         // Read the boxes again in case they were typed in and never left.
-        const picked = withinBarcodeRange(scope[2], fromInput.value, toInput.value).slice().sort(order[2]);
-        if (!picked.length) { toast('No books in that range.', 'error'); return; }
+        const dated = sinceInput.value ? scope[2].filter(i => (i.addedAt || '') >= sinceInput.value) : scope[2];
+        const picked = withinBarcodeRange(dated, fromInput.value, toInput.value).slice().sort(order[2]);
+        if (!picked.length) { toast('No books match that.', 'error'); return; }
+        const marking = markBox.checked;
         closeModal();
         printLabels(picked, Math.max(0, Number(skipInput.value) || 0),
           order[0] === 'genre' && splitBox && splitBox.checked);
+        if (marking) {
+          markLabelled(picked, true);
+          lastLabelled = picked.slice();
+          toast(plural(picked.length, 'book') + ' marked as labelled.', 'ok');
+          render();
+        }
       });
       const guess = body.querySelector('#guess-genres');
       if (guess) guess.addEventListener('click', async () => {
@@ -2069,7 +2126,7 @@ function openLabelsModal() {
       });
     });
   }
-  draw('listed', 0, '', 'barcode', '', '');
+  draw('listed', 0, '', 'barcode', '', '', false, '', true);
 }
 
 /* ============================ SAMPLE DATA ============================ */

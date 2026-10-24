@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS = {
   autoCreatePatrons: true,
   barcodePrefix: 'CL',
   nextBarcode: 1,
+  labelPresets: [],
   // The classroom's own categories — rename, add or delete in Settings.
   genres: [
     'Adventure', 'Biography', 'Dystopian', 'Fantasy / Sci-Fi', 'Graphic Novels',
@@ -72,6 +73,7 @@ function migrate(parsed) {
   const db = Object.assign(blankDB(), parsed);
   db.settings = Object.assign({}, DEFAULT_SETTINGS, parsed.settings || {});
   if (!Array.isArray(db.settings.genres)) db.settings.genres = DEFAULT_SETTINGS.genres.slice();
+  if (!Array.isArray(db.settings.labelPresets)) db.settings.labelPresets = [];
   ['items', 'patrons', 'loans', 'holds', 'reviews', 'activity'].forEach(k => { if (!Array.isArray(db[k])) db[k] = []; });
 
   // The free-text "shelf / location" field became a genre. A location that names a genre
@@ -493,6 +495,44 @@ function readyHolds() {
       seen[h.itemId] = true;
       return true;
     });
+}
+
+/* --- labels --- */
+
+/* Printing records the date on each book, so a later run can offer only the
+   ones that have never had a label. Reprinting is always allowed; this is a
+   record, not a lock. */
+function markLabelled(items, on) {
+  (items || []).forEach(b => {
+    const item = itemById(b.id);
+    if (!item) return;
+    if (on) item.labeledAt = nowISO();
+    else delete item.labeledAt;
+  });
+  saveDB();
+  return { ok: true, count: (items || []).length };
+}
+
+const unlabelledItems = () => DB.items.filter(i => !i.labeledAt);
+
+/* --- label dialog presets --- */
+
+const labelPresets = () => (S().labelPresets || []).slice();
+
+function saveLabelPreset(name, settings) {
+  const clean = String(name || '').trim();
+  if (!clean) return { ok: false, error: 'Give the preset a name.' };
+  const list = labelPresets().filter(p => normName(p.name) !== normName(clean));
+  list.push(Object.assign({ name: clean }, settings));
+  S().labelPresets = list.sort((a, b) => normName(a.name).localeCompare(normName(b.name)));
+  saveDB();
+  return { ok: true, name: clean };
+}
+
+function deleteLabelPreset(name) {
+  S().labelPresets = labelPresets().filter(p => normName(p.name) !== normName(name));
+  saveDB();
+  return { ok: true };
 }
 
 /* --- lost and damaged --- */

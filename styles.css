@@ -661,6 +661,7 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .sl-num { font-family: var(--mono); font-size: 4.8pt; line-height: 1; margin-bottom: 0.02in; }
 
 .label-preview { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.preset-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
 .label-sheet { display: grid; grid-template-columns: repeat(11, 0.66in); }
 
 /* ---------------- printing ---------------- */

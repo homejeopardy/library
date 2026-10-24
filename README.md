@@ -223,6 +223,19 @@ Sorting by genre also offers **start each genre on a new page**, so a sheet only
 one bin's labels and no cut row belongs to two genres. The last sheet of each genre is
 part-used, which costs a few labels.
 
+**Which books:** the ones currently listed in the catalog, **the ones with no label printed
+yet**, or every book — then narrow by barcode range and by **added on or after**, so
+"everything I catalogued this week" is two clicks.
+
+Printing records the date on each book it printed, which is what makes "no label printed
+yet" work across several sittings. Untick **remember that these have been printed** for a
+test run, and if the printer jams there's an **Undo "marked as labelled"** button on the
+toolbar afterwards. A book's own record shows when its label was printed.
+
+**Presets** keep a set of these choices under a name — "New books", "Rebuild a bin" — and
+sit along the top of the dialog. They live in the library's settings, so they follow you
+to every device.
+
 **Printing:** choose the books currently listed in the catalog (so the search box and the
 genre filter decide what you get) or every book, narrow that to a **range of barcode
 numbers** — leave either end blank for "no limit", and the dialog says how many books fall
