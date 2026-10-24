@@ -27,7 +27,7 @@ const Sync = (function () {
   const KEY_PREFIX = 'classroom-library-key-';
   const BASE_KEY = 'classroom-library-synced';
   const FILES = {
-    catalog: { path: 'catalog.json', keys: ['items', 'settings'] },
+    catalog: { path: 'catalog.json', keys: ['items', 'shelves', 'settings'] },
     circulation: { path: 'circulation.json', keys: ['patrons', 'loans', 'holds', 'reviews'] }
   };
 

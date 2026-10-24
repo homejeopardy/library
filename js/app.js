@@ -10,7 +10,7 @@ const VIEWS = {};   // route -> HTML string
 const AFTER = {};   // route -> post-render wiring
 const ACTIONS = {}; // data-act name -> handler
 
-const ROUTES = ['circulation', 'catalog', 'patrons', 'holds', 'reports', 'settings'];
+const ROUTES = ['circulation', 'catalog', 'shelves', 'patrons', 'holds', 'reports', 'settings'];
 let route = (location.hash || '').replace('#', '') || 'circulation';
 if (!ROUTES.includes(route)) route = 'circulation';
 
@@ -75,7 +75,9 @@ function render() {
   pill.hidden = ready === 0;
   pill.textContent = ready;
 
-  view.innerHTML = VIEWS[route]();
+  const build = VIEWS[route];
+  if (!build) { view.innerHTML = ''; return; }   // registered by a script that loads after this one
+  view.innerHTML = build();
   if (AFTER[route]) AFTER[route]();
 }
 
@@ -632,6 +634,9 @@ async function handleScan(raw) {
   const value = String(raw || '').trim();
   if (!value) return;
 
+  const shelf = typeof findShelfByScan === 'function' ? findShelfByScan(value) : null;
+  if (shelf) { ACTIONS['shelf-open'](shelf.id); toast('Filing shelf ' + shelf.code + '.', 'info'); return; }
+
   const item = findItemByCode(value);
   if (item) { circ.item = item; circ.matches = null; render(); return; }
 
@@ -803,6 +808,7 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
       ${field('Cover image URL', 'cover', d.cover)}
     </div>
     <label class="field"><span>Notes</span><textarea name="notes" rows="2">${esc(d.notes)}</textarea></label>
+    ${item && item.shelfId && shelfById(item.shelfId) ? `<p class="hint">Last filed on shelf <strong>${esc(shelfById(item.shelfId).code)}</strong>${item.shelvedAt ? ' on ' + esc(fmtDateFull(item.shelvedAt)) : ''}.</p>` : ''}
     ${item && item.labeledAt ? `<p class="hint">A spine label was printed for this on ${esc(fmtDateFull(item.labeledAt))}.</p>` : ''}
     ${item && itemRating(item.id) ? `<p class="hint">Students rated this ${starsHTML(itemRating(item.id).avg)} ${itemRating(item.id).avg.toFixed(1)} from ${plural(itemRating(item.id).count, 'rating')}.</p>` : ''}
     <div class="actions">

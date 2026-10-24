@@ -41,7 +41,7 @@ const GENRE_SET_2_MAP = {
 };
 
 function blankDB() {
-  return { version: 1, items: [], patrons: [], loans: [], holds: [], reviews: [], activity: [], settings: Object.assign({}, DEFAULT_SETTINGS) };
+  return { version: 1, items: [], shelves: [], patrons: [], loans: [], holds: [], reviews: [], activity: [], settings: Object.assign({}, DEFAULT_SETTINGS) };
 }
 
 /* A book is on the shelf unless something has happened to it. */
@@ -74,7 +74,7 @@ function migrate(parsed) {
   db.settings = Object.assign({}, DEFAULT_SETTINGS, parsed.settings || {});
   if (!Array.isArray(db.settings.genres)) db.settings.genres = DEFAULT_SETTINGS.genres.slice();
   if (!Array.isArray(db.settings.labelPresets)) db.settings.labelPresets = [];
-  ['items', 'patrons', 'loans', 'holds', 'reviews', 'activity'].forEach(k => { if (!Array.isArray(db[k])) db[k] = []; });
+  ['items', 'shelves', 'patrons', 'loans', 'holds', 'reviews', 'activity'].forEach(k => { if (!Array.isArray(db[k])) db[k] = []; });
 
   // The free-text "shelf / location" field became a genre. A location that names a genre
   // becomes that genre; anything else is kept in the book's notes rather than lost.
@@ -495,6 +495,105 @@ function readyHolds() {
       seen[h.itemId] = true;
       return true;
     });
+}
+
+/* ------------------------------ shelves ------------------------------
+   A shelf is a physical place that holds one genre — a genre may fill
+   several. Books record which shelf they are on, so a book can be found
+   even when it has wandered from where its genre says it should be.
+   --------------------------------------------------------------------- */
+
+const SHELF_BARCODE_PREFIX = 'SHELF-';
+
+const shelvesList = () => DB.shelves.slice().sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+const shelfById = id => DB.shelves.find(s => s.id === id) || null;
+const shelfByCode = code => DB.shelves.find(s => normCode(s.code) === normCode(code)) || null;
+const itemsOnShelf = id => DB.items.filter(i => i.shelfId === id);
+const shelfBarcode = shelf => SHELF_BARCODE_PREFIX + String(shelf.code || '').toUpperCase();
+
+/* Recognises a scanned shelf card, with or without its SHELF- prefix. */
+function findShelfByScan(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return null;
+  const stripped = raw.replace(new RegExp('^' + SHELF_BARCODE_PREFIX, 'i'), '');
+  return shelfByCode(stripped);
+}
+
+function addShelf(fields) {
+  const code = String(fields.code || '').trim().toUpperCase();
+  if (!code) return { ok: false, error: 'Give the shelf a short code, like A3.' };
+  if (shelfByCode(code)) return { ok: false, error: 'There is already a shelf ' + code + '.' };
+  if (findItemByCode(SHELF_BARCODE_PREFIX + code)) return { ok: false, error: 'That code clashes with a book barcode.' };
+  const shelf = {
+    id: uid('shf'), code: code,
+    name: String(fields.name || '').trim(),
+    genre: String(fields.genre || '').trim(),
+    fromLetters: String(fields.fromLetters || '').trim().toUpperCase(),
+    toLetters: String(fields.toLetters || '').trim().toUpperCase(),
+    createdAt: nowISO()
+  };
+  DB.shelves.push(shelf);
+  saveDB();
+  return { ok: true, shelf: shelf };
+}
+
+function updateShelf(id, fields) {
+  const shelf = shelfById(id);
+  if (!shelf) return { ok: false, error: 'Shelf not found.' };
+  if (fields.code != null) {
+    const code = String(fields.code).trim().toUpperCase();
+    if (!code) return { ok: false, error: 'A shelf needs a code.' };
+    const clash = shelfByCode(code);
+    if (clash && clash.id !== id) return { ok: false, error: 'There is already a shelf ' + code + '.' };
+    fields.code = code;
+  }
+  ['fromLetters', 'toLetters'].forEach(k => { if (fields[k] != null) fields[k] = String(fields[k]).trim().toUpperCase(); });
+  Object.assign(shelf, fields);
+  saveDB();
+  return { ok: true, shelf: shelf };
+}
+
+function deleteShelf(id) {
+  DB.items.forEach(i => { if (i.shelfId === id) delete i.shelfId; });
+  DB.shelves = DB.shelves.filter(s => s.id !== id);
+  saveDB();
+  return { ok: true };
+}
+
+/* Everything worth a noise when a book is scanned onto a shelf. The book is
+   still filed — this says what to look at afterwards, not what to refuse. */
+function shelvingIssues(item, shelf) {
+  const issues = [];
+  const loan = activeLoanForItem(item.id);
+  if (loan) {
+    const who = patronById(loan.patronId);
+    issues.push({ kind: 'out', text: 'Checked out to ' + (who ? who.name : 'someone') + ' — the app thought it was away.' });
+  }
+  if (item.status) issues.push({ kind: 'status', text: 'Marked ' + statusLabel(item.status).toLowerCase() + ' — it turned up after all.' });
+  if (shelf.genre && item.genre && normName(item.genre) !== normName(shelf.genre)) {
+    issues.push({ kind: 'genre', text: 'This is ' + item.genre + ', not ' + shelf.genre + '.' });
+  }
+  if (shelf.genre && !item.genre) issues.push({ kind: 'nogenre', text: 'No genre set.' });
+  const letters = callLetters(item.title);
+  if (shelf.fromLetters && letters && letters < shelf.fromLetters) {
+    issues.push({ kind: 'range', text: letters + ' sorts before this shelf\'s ' + shelf.fromLetters + '.' });
+  }
+  if (shelf.toLetters && letters && letters > shelf.toLetters) {
+    issues.push({ kind: 'range', text: letters + ' sorts after this shelf\'s ' + shelf.toLetters + '.' });
+  }
+  return issues;
+}
+
+/* Records that a book is on a shelf. Never changes its genre: a stray is
+   reported so it can be moved, not quietly relabelled. */
+function fileToShelf(itemId, shelfId) {
+  const item = itemById(itemId), shelf = shelfById(shelfId);
+  if (!item || !shelf) return { ok: false, error: 'Book or shelf not found.' };
+  const moved = item.shelfId && item.shelfId !== shelfId ? shelfById(item.shelfId) : null;
+  item.shelfId = shelfId;
+  item.shelvedAt = nowISO();
+  saveDB();
+  return { ok: true, item: item, shelf: shelf, movedFrom: moved, issues: shelvingIssues(item, shelf) };
 }
 
 /* --- labels --- */

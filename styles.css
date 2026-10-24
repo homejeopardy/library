@@ -624,6 +624,38 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 
 .stars { color: var(--warn); letter-spacing: .5px; white-space: nowrap; }
 
+/* ---------------- shelves ---------------- */
+
+.shelf-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+.shelf-code { font-family: var(--mono); font-size: 34px; margin: 0; letter-spacing: -.01em; }
+.shelf-tally { display: flex; gap: 20px; }
+.shelf-tally div { display: flex; flex-direction: column; }
+.shelf-tally strong { font-size: 22px; font-weight: 650; }
+.shelf-tally span { font-size: 11px; color: var(--text-muted); }
+.scan-log tr.row-problem td { background: var(--danger-soft); }
+
+/* A shelf card: the code carries across the room, the barcode is for the scanner. */
+.shelf-card {
+  width: 3in;
+  height: 1in;
+  display: flex;
+  align-items: center;
+  gap: 0.08in;
+  padding: 0.06in 0.09in;
+  overflow: hidden;
+  color: #000;
+  background: #fff;
+  border: 1px dotted var(--border-strong);
+  break-inside: avoid;
+}
+.sc-code { font-size: 26pt; font-weight: 650; line-height: 1; flex: none; }
+.sc-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sc-genre { font-size: 8.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; line-height: 1.15; }
+.sc-where { font-size: 7pt; color: #333; line-height: 1.2; }
+.sc-code39 { flex: none; width: 1in; line-height: 0; }
+.sc-code39 .barcode { width: 1in; height: 0.42in; }
+.shelf-sheet { display: grid; grid-template-columns: repeat(2, 3in); }
+
 /* ---------------- spine labels ---------------- */
 
 /* One label. Sized in inches so the screen preview is the printed size. */
@@ -675,6 +707,7 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
   /* Hairline cut guides; labels sit edge to edge so one cut serves two. */
   .spine-label { border: 0.25pt solid #bbb; margin: 0 -0.125pt -0.125pt 0; }
   .label-sheet + .label-sheet { break-before: page; page-break-before: always; }
+  .shelf-card { border: 0.25pt solid #bbb; margin: 0 -0.125pt -0.125pt 0; }
   .spine-label.blank * { visibility: hidden; }
   .print-area { display: block; color: #000; background: #fff; font-size: 12pt; }
   .notice { page-break-after: always; padding: 24px 0; }

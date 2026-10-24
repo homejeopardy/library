@@ -1,0 +1,143 @@
+<!doctype html><meta charset=utf-8>
+<title>Shelf label prototypes</title>
+<style>
+ body{background:#f3f3f1;color:#111;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:24px 28px 60px}
+ h2{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:#777;font-weight:600;margin:30px 0 4px}
+ p.note{font-size:12.5px;color:#666;margin:0 0 12px;max-width:52em}
+ .sheet{background:#fff;display:inline-block;padding:14px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+ .lab{box-sizing:border-box;border:1px dashed #c4c4c4;color:#000;background:#fff;overflow:hidden}
+ .stack{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+ svg{display:block}
+ .art{color:#000}
+ /* A: code first */
+ .a{width:3in;height:1in;display:flex;align-items:center;gap:.12in;padding:.06in .1in}
+ .a .code{font-size:30pt;font-weight:650;line-height:1;letter-spacing:-.01em}
+ .a .mid{flex:1;min-width:0}
+ .a .genre{display:block;font-size:9pt;font-weight:600;text-transform:uppercase;letter-spacing:.04em;line-height:1.15}
+ .a .sub{display:block;font-size:7.5pt;color:#444;line-height:1.2}
+ .a .mid{overflow:hidden}
+ /* B: genre first */
+ .b{width:3in;height:1.5in;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.04in;padding:.08in}
+ .b .genre{font-size:13pt;font-weight:650;text-align:center;line-height:1.1}
+ .b .code{font-family:ui-monospace,Menlo,monospace;font-size:8pt;color:#333}
+ /* C: bin card */
+ .c{width:4in;height:3in;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.06in;padding:.12in}
+ .c .genre{font-size:22pt;font-weight:650;text-align:center;line-height:1.05}
+ .c .say{font-size:10pt;color:#444}
+ .c .code{font-family:ui-monospace,Menlo,monospace;font-size:9pt;color:#333}
+ /* D: range */
+ .d{width:3in;height:1in;display:flex;align-items:center;gap:.1in;padding:.06in .1in}
+ .d .range{display:block;font-size:17pt;font-weight:650;letter-spacing:.02em;line-height:1.1}
+ .d .genre{display:block;font-size:8pt;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+ .d .mid{flex:1;min-width:0}
+ /* E: strip */
+ .e{width:6in;height:.75in;display:flex;align-items:center;gap:.14in;padding:.05in .12in}
+ .e .genre{font-size:12pt;font-weight:650;flex:1}
+ .e .code{font-family:ui-monospace,Menlo,monospace;font-size:8pt;color:#333}
+</style>
+<script>
+/* ---------------------------------------------------------------
+   Code 39 barcodes, drawn as SVG.
+
+   Code 39 is the old library standard: every scanner reads it out of
+   the box, it needs no check digit (the symbology is self-checking),
+   and it carries letters, digits and "-" — so a label can hold the
+   barcode exactly as it is stored, "CL-0042" and all. It is bulky
+   compared to Code 128, which is why the spine label runs it along
+   the long edge rather than across the narrow one.
+
+   Each character is nine elements — five bars and four spaces,
+   alternating, bar first — of which exactly three are wide. Widths
+   here are in SVG units: narrow 2, wide 5, giving the 2.5:1 ratio
+   printers hold most reliably at small sizes.
+   --------------------------------------------------------------- */
+
+const CODE39 = {
+  '0': 'nnnwwnwnn', '1': 'wnnwnnnnw', '2': 'nnwwnnnnw', '3': 'wnwwnnnnn',
+  '4': 'nnnwwnnnw', '5': 'wnnwwnnnn', '6': 'nnwwwnnnn', '7': 'nnnwnnwnw',
+  '8': 'wnnwnnwnn', '9': 'nnwwnnwnn',
+  'A': 'wnnnnwnnw', 'B': 'nnwnnwnnw', 'C': 'wnwnnwnnn', 'D': 'nnnnwwnnw',
+  'E': 'wnnnwwnnn', 'F': 'nnwnwwnnn', 'G': 'nnnnnwwnw', 'H': 'wnnnnwwnn',
+  'I': 'nnwnnwwnn', 'J': 'nnnnwwwnn', 'K': 'wnnnnnnww', 'L': 'nnwnnnnww',
+  'M': 'wnwnnnnwn', 'N': 'nnnnwnnww', 'O': 'wnnnwnnwn', 'P': 'nnwnwnnwn',
+  'Q': 'nnnnnnwww', 'R': 'wnnnnnwwn', 'S': 'nnwnnnwwn', 'T': 'nnnnwnwwn',
+  'U': 'wwnnnnnnw', 'V': 'nwwnnnnnw', 'W': 'wwwnnnnnn', 'X': 'nwnnwnnnw',
+  'Y': 'wwnnwnnnn', 'Z': 'nwwnwnnnn',
+  '-': 'nwnnnnwnw', '.': 'wwnnnnwnn', ' ': 'nwwnnnwnn',
+  '$': 'nwnwnwnnn', '/': 'nwnwnnnwn', '+': 'nwnnnwnwn', '%': 'nnnwnwnwn',
+  '*': 'nwnnwnwnn'
+};
+
+const BAR_NARROW = 2, BAR_WIDE = 5, BAR_GAP = 2, BAR_QUIET = 20;
+
+function code39Supports(text) {
+  const up = String(text || '').trim().toUpperCase();
+  return !!up && up.indexOf('*') === -1 && up.split('').every(c => CODE39[c]);
+}
+
+/* Returns an SVG whose viewBox is the symbol's true proportions, so the
+   caller sets its printed length with width/height and the bar widths
+   stay in step. Returns '' for anything Code 39 cannot carry. */
+function code39SVG(text, barColor) {
+  const up = String(text || '').trim().toUpperCase();
+  if (!code39Supports(up)) return '';
+  const chars = ('*' + up + '*').split('');
+  const bars = [];
+  let x = BAR_QUIET;
+  chars.forEach((ch, n) => {
+    const pattern = CODE39[ch];
+    for (let i = 0; i < 9; i++) {
+      const w = pattern[i] === 'w' ? BAR_WIDE : BAR_NARROW;
+      if (i % 2 === 0) bars.push('<rect x="' + x + '" y="0" width="' + w + '" height="100"/>');
+      x += w;
+    }
+    if (n < chars.length - 1) x += BAR_GAP;   // inter-character gap, one narrow space
+  });
+  const total = x + BAR_QUIET;
+  return '<svg class="barcode" viewBox="0 0 ' + total + ' 100" preserveAspectRatio="none" ' +
+    'shape-rendering="crispEdges" fill="' + (barColor || '#000') + '" aria-hidden="true">' + bars.join('') + '</svg>';
+}
+
+/* How many SVG units long the symbol is — used to work out the printed
+   width of one narrow bar, which decides whether a scanner can read it. */
+function code39Units(text) {
+  const n = String(text || '').trim().length + 2;        // plus the two '*' guards
+  return n * (6 * BAR_NARROW + 3 * BAR_WIDE) + (n - 1) * BAR_GAP + 2 * BAR_QUIET;
+}
+
+</script>
+<script>const ART = {"Adventure": "<circle cx=\"12\" cy=\"12\" r=\"9\"/> <path d=\"M15.6 8.4 13.4 13.4 8.4 15.6 10.6 10.6Z\"/>", "Fantasy / Sci-Fi": "<circle cx=\"12\" cy=\"12\" r=\"6.2\"/> <ellipse cx=\"12\" cy=\"12\" rx=\"10.6\" ry=\"3.4\" transform=\"rotate(-22 12 12)\"/>", "Plays & Poems": "<path d=\"M4.6 6.2C6.9 5 9.3 4.4 12 4.4s5.1.6 7.4 1.8c.2 6.6-2.4 13.4-7.4 13.4S4.4 12.8 4.6 6.2Z\"/> <ellipse cx=\"9.2\" cy=\"9.7\" rx=\"1\" ry=\"1.2\" fill=\"currentColor\" stroke=\"none\"/> <ellipse cx=\"14.8\" cy=\"9.7\" rx=\"1\" ry=\"1.2\" fill=\"currentColor\" stroke=\"none\"/> <path d=\"M9.1 13.9c.9.8 1.9 1.2 2.9 1.2s2-.4 2.9-1.2\"/>", "Graphic Novels": "<rect x=\"3\" y=\"3.5\" width=\"18\" height=\"17\" rx=\"2.2\"/> <path d=\"M8 8h8a1.8 1.8 0 0 1 1.8 1.8v2.9A1.8 1.8 0 0 1 16 14.5h-4.3L8.6 17v-2.5H8a1.8 1.8 0 0 1-1.8-1.8V9.8A1.8 1.8 0 0 1 8 8Z\"/>", "Historical Fiction": "<path d=\"M6 3h12M6 21h12\"/> <path d=\"M7.6 3v2.6c0 2 1.8 3.4 3.2 4.6.6.5.9.8.9 1.8s-.3 1.3-.9 1.8c-1.4 1.2-3.2 2.6-3.2 4.6V21\"/> <path d=\"M16.4 3v2.6c0 2-1.8 3.4-3.2 4.6-.6.5-.9.8-.9 1.8s.3 1.3.9 1.8c1.4 1.2 3.2 2.6 3.2 4.6V21\"/>"};</script>
+<div id="out"></div>
+<script>
+const bc = (text, w, h) => '<span style="display:block;width:' + w + ';height:' + h + '">'
+  + code39SVG(text).replace('<svg ', '<svg style="width:100%;height:100%" ') + '</span>';
+const icon = (g, size) => '<svg class="art" viewBox="0 0 24 24" width="' + size + '" height="' + size + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (ART[g]||'') + '</svg>';
+
+const protos = [
+ ['A — code first, 3\u2033 \u00d7 1\u2033',
+  'The shelf code is the biggest thing on it. Reads from across the room, and the barcode is right there to scan.',
+  ['<div class="lab a"><span class="code">A3</span><span class="mid"><span class="genre">Adventure</span><span class="sub">Bookcase A, third shelf</span></span>' + bc('SHELF-A3','1.05in','.42in') + '</div>',
+   '<div class="lab a"><span class="code">B1</span><span class="mid"><span class="genre">Plays &amp; Poems</span><span class="sub">Bookcase B, top shelf</span></span>' + bc('SHELF-B1','1.05in','.42in') + '</div>']],
+
+ ['B — genre first, 3\u2033 \u00d7 1.5\u2033',
+  'The picture leads, matching the spine labels. Students find the bin by the drawing; the code is for you.',
+  ['<div class="lab b">' + icon('Fantasy / Sci-Fi', 38) + '<span class="genre">Fantasy / Sci-Fi</span>' + bc('SHELF-C2','1.6in','.3in') + '<span class="code">C2</span></div>',
+   '<div class="lab b">' + icon('Graphic Novels', 38) + '<span class="genre">Graphic Novels</span>' + bc('SHELF-C3','1.6in','.3in') + '<span class="code">C3</span></div>']],
+
+ ['C — bin card, 4\u2033 \u00d7 3\u2033',
+  'For the front of a bin or a tub rather than a shelf edge. Big enough to read while holding an armful of books.',
+  ['<div class="lab c">' + icon('Adventure', 64) + '<span class="genre">Adventure</span><span class="say">Put these back here</span>' + bc('SHELF-A3','2.2in','.4in') + '<span class="code">A3</span></div>']],
+
+ ['D — letter range, 3\u2033 \u00d7 1\u2033',
+  'For a genre that fills several shelves: each shelf says which stretch of the alphabet lives on it.',
+  ['<div class="lab d">' + icon('Historical Fiction', 30) + '<span class="mid"><span class="genre">Historical Fiction</span><span class="range">ADA \u2013 KIN</span></span>' + bc('SHELF-D1','1in','.4in') + '</div>',
+   '<div class="lab d">' + icon('Historical Fiction', 30) + '<span class="mid"><span class="genre">Historical Fiction</span><span class="range">LET \u2013 UND</span></span>' + bc('SHELF-D2','1in','.4in') + '</div>']],
+
+ ['E — edge strip, 6\u2033 \u00d7 0.75\u2033',
+  'A long thin strip for the front edge of a shelf, where a tall label would be in the way of the books.',
+  ['<div class="lab e">' + icon('Plays & Poems', 26) + '<span class="genre">Plays &amp; Poems</span><span class="code">B1</span>' + bc('SHELF-B1','1.5in','.34in') + '</div>']],
+];
+
+document.getElementById('out').innerHTML = protos.map(([t, note, labs]) =>
+  '<h2>' + t + '</h2><p class="note">' + note + '</p><div class="sheet"><div class="stack">' + labs.join('') + '</div></div>').join('');
+</script>

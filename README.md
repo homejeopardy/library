@@ -206,6 +206,36 @@ The intended rhythm at the desk, with a scanner and no mouse:
 For a stack of books, use **Add & add another**: the next dialog opens blank, ready for the
 next ISBN, and suggests a genre for that book.
 
+## Shelves
+
+A shelf is a physical place that holds one genre — and a genre may fill several shelves,
+each with its own code and, if you like, a stretch of the alphabet.
+
+**Shelves → Add a shelf**, give it a code like `A3`, say where it is and which genre lives
+there, then **Print shelf cards** and stick each card on its shelf. A card is 3&Prime; × 1&Prime;:
+the code large enough to read across the room, the genre and location beside it, and a
+scannable Code 39 of `SHELF-A3`.
+
+### Filing a shelf
+
+Stand at the shelf with the scanner and **scan the shelf card** — from the Shelves tab or
+the circulation desk, either works. Then scan every book on the shelf. Each scan files the
+book there and plays a sound:
+
+- a quiet click when all is well;
+- a buzz when something wants looking at — a book from another genre, a book the app
+  thought was checked out, one marked lost that has turned up, a repeat scan, or call
+  letters outside the shelf's range;
+- a rougher tone for a barcode that isn't in the library at all, with an **Add it** link.
+
+Everything is keyboard-driven and the window can be narrow, for working off a laptop at the
+shelf. Scanning a different shelf card moves you to that shelf. **Sound off** is there for
+a quiet room.
+
+**Filing never changes a book's genre.** A stray is reported so you can move it, not quietly
+relabelled. The session also offers a list of books the app expects on that shelf which you
+haven't scanned — checked out, mis-shelved, or simply not reached yet.
+
 ## Printing spine labels
 
 **Catalog → Print labels.** Each label is 0.66&Prime; wide and 1&Prime; tall, and carries, top to
