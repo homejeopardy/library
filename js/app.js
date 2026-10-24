@@ -252,14 +252,18 @@ function openVersionModal(sha, version) {
 function describeBookChange(was, now) {
   if (!was) return 'added since';
   const named = { title: 'title', author: 'author', genre: 'genre', barcode: 'barcode', status: 'condition', shelfId: 'shelf' };
+  /* A shelf that has since been deleted still has an id, so say that rather than "none". */
+  const shelfName = id => {
+    if (!id) return 'no shelf';
+    const shelf = shelfById(id);
+    return shelf ? shelf.code : 'a shelf since deleted';
+  };
   const parts = Object.keys(named).filter(k => (was[k] || '') !== (now[k] || '')).map(k => {
-    if (k === 'shelfId') {
-      const from = was.shelfId && shelfById(was.shelfId), to = now.shelfId && shelfById(now.shelfId);
-      return 'shelf ' + (from ? from.code : 'none') + ' → ' + (to ? to.code : 'none');
-    }
-    return named[k] + ' ' + (was[k] || '—') + ' → ' + (now[k] || '—');
-  });
-  return parts.length ? parts.join(', ') : 'something else changed';
+    if (k === 'shelfId') return ['shelf', shelfName(was.shelfId), shelfName(now.shelfId)];
+    return [named[k], was[k] || '—', now[k] || '—'];
+  /* Two different values can read the same — two deleted shelves, say. Nothing to show then. */
+  }).filter(p => p[1] !== p[2]).map(p => p[0] + ' ' + p[1] + ' → ' + p[2]);
+  return parts.length ? parts.join(', ') : 'edited';
 }
 
 /* ------------------------------ signing in ------------------------------
