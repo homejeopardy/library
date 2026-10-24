@@ -2176,11 +2176,60 @@ shared drives and out of the hands of students.</p>
 
 /* ============================== PRINTING ============================== */
 
-function printHTML(html) {
+/* Printing a sheet that was built in this same tick. Two things have to happen
+   first, or the browser spools a job with nothing in it and reports it finished:
+   the page has to lay the new content out, and anything it pulls in has to arrive. */
+async function printHTML(html) {
   const area = document.getElementById('print-area');
   area.innerHTML = html;
+  document.body.classList.add('has-print-sheet');
+
+  /* One frame to apply the change, a second to be sure it has been laid out. */
+  await new Promise(go => requestAnimationFrame(() => requestAnimationFrame(go)));
+  await settled(area);
+
+  if (!area.firstElementChild) { toast('There was nothing to print.', 'error'); return; }
   window.print();
 }
+
+/* Covers and fonts, with a ceiling so a slow network can't stall the print. */
+function settled(area, ms) {
+  const waits = [...area.querySelectorAll('img')].filter(img => !img.complete).map(img =>
+    new Promise(done => {
+      img.addEventListener('load', done, { once: true });
+      img.addEventListener('error', done, { once: true });
+    }));
+  if (document.fonts && document.fonts.ready) waits.push(document.fonts.ready);
+  if (!waits.length) return Promise.resolve();
+  return Promise.race([Promise.all(waits), new Promise(go => setTimeout(go, ms || 4000))]);
+}
+
+/* Ctrl/Cmd-P with no sheet staged would otherwise print one blank page, because
+   the app's own screen is hidden for printing. Say what to press instead. */
+window.addEventListener('beforeprint', () => {
+  const area = document.getElementById('print-area');
+  if (area.firstElementChild) return;
+  area.innerHTML = `<section class="notice print-hint">
+    <h1>${esc(S().libraryName)}</h1>
+    <h2>Nothing has been chosen to print</h2>
+    <p>This page prints from its own buttons, so that a label sheet comes out as labels
+      rather than as a picture of the screen:</p>
+    <ul>
+      <li><strong>Catalog → Print labels</strong> for spine labels.</li>
+      <li><strong>Catalog → Print list</strong> for a shelf list.</li>
+      <li><strong>Shelves → Print shelf cards</strong>, or a shelf's own page for
+        <strong>Print its card</strong> and <strong>Print the list</strong>.</li>
+      <li><strong>Reports → Print notices</strong> for overdue notices.</li>
+    </ul>
+    <p>Cancel this, press one of those, and the print box will open again by itself.</p>
+  </section>`;
+});
+
+/* Don't leave a sheet staged, or the next print would quietly repeat the last one. */
+window.addEventListener('afterprint', () => {
+  document.getElementById('print-area').innerHTML = '';
+  document.body.classList.remove('has-print-sheet');
+});
 
 function printOverdueNotices() {
   const over = overdueLoans();

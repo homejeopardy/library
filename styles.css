@@ -733,7 +733,10 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 @page { size: letter; margin: 0.5in; }
 
 @media print {
-  .topbar, .view, .toasts, #modal { display: none !important; }
+  .topbar, .toasts, #modal { display: none !important; }
+  .view { display: none !important; }
+  .print-hint { max-width: 5in; }
+  .print-hint li { margin: 4px 0; }
   /* Hairline cut guides; labels sit edge to edge so one cut serves two. */
   .spine-label { border: 0.25pt solid #bbb; margin: 0 -0.125pt -0.125pt 0; }
   .label-sheet + .label-sheet { break-before: page; page-break-before: always; }
