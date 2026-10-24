@@ -166,3 +166,17 @@ body.kiosk { font-size: 17px; }
 }
 .k-putback-genre { display: inline-flex; align-items: center; gap: 6px; font-size: 19px; font-weight: 550; color: var(--text); }
 .k-putback-where { font-size: 14px; color: var(--text-muted); flex-basis: 100%; }
+
+/* The staff way in: present, not advertised. */
+.staff-link {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.staff-link:hover { color: var(--text); background: var(--surface-2); }

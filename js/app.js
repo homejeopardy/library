@@ -16,7 +16,7 @@ if (!ROUTES.includes(route)) route = 'circulation';
 
 /* Transient screen state (never persisted). */
 const circ = { item: null, patron: null, matches: null, busy: false };
-const ui = { catalogQuery: '', catalogFilter: 'all', catalogGenre: '', catalogShelf: '', patronQuery: '' };
+const ui = { catalogQuery: '', catalogFilter: 'all', catalogGenre: '', catalogShelf: '', patronQuery: '', patronGroup: '', picked: new Set() };
 
 const view = document.getElementById('view');
 const modal = document.getElementById('modal');
@@ -59,7 +59,7 @@ function render() {
   renderSyncPill();
   const who = document.getElementById('who');
   who.hidden = !Auth.me();
-  who.textContent = Auth.me() ? 'Sign out (' + Auth.me() + ')' : '';
+  who.textContent = Auth.me() ? (Auth.temporary() ? 'Done — back to students' : 'Sign out (' + Auth.me() + ')') : '';
   const locked = Sync.stationOnly();
   const gated = !locked && Auth.needsSignIn();
   document.getElementById('tabs').hidden = locked || gated;
@@ -184,10 +184,24 @@ const Auth = (function () {
   /* Remember whether accounts exist, so the gate works before the network answers. */
   function noteAccounts(list) { set(SEEN, list && list.length ? '1' : null); }
 
+  /* A sign-in that came from the student screen lasts only while the admin
+     page is open — closing it, or going back, signs out. */
+  const TEMP = 'classroom-library-me-temp';
+  const temporary = () => get(TEMP) === '1';
+  if (temporary()) {
+    window.addEventListener('pagehide', () => { set(ME, null); set(TEMP, null); });
+  }
+
   return {
+    temporary: temporary,
     me: () => get(ME),
     signIn: name => { set(ME, name); render(); },
-    signOut: () => { set(ME, null); render(); },
+    signOut: () => {
+      const wasTemporary = temporary();
+      set(ME, null); set(TEMP, null);
+      if (wasTemporary) { location.href = 'student/'; return; }
+      render();
+    },
     needsSignIn: needsSignIn,
     noteAccounts: noteAccounts
   };
@@ -1050,6 +1064,31 @@ function openMergeModal(fromId) {
 }
 
 /* --- lost or damaged --- */
+/* One change applied to every ticked book, with a count and no surprises. */
+function bulkChange(title, fieldHTML, apply) {
+  const picked = DB.items.filter(i => ui.picked.has(i.id));
+  openModal(title, `
+    ${fieldHTML}
+    <p class="hint">This changes all ${plural(picked.length, 'selected book')} at once. It cannot be undone in one step.</p>
+    <div class="actions">
+      <button type="button" class="btn btn-primary" id="do-bulk">Change ${plural(picked.length, 'book')}</button>
+      <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+    </div>
+  `, body => {
+    body.querySelector('#do-bulk').addEventListener('click', () => {
+      const value = body.querySelector('[name="value"]').value;
+      let done = 0, failed = 0;
+      picked.forEach(item => {
+        const res = apply(item, value);
+        (!res || res.ok === false) ? failed++ : done++;
+      });
+      toast(plural(done, 'book') + ' changed' + (failed ? ', ' + failed + ' could not be' : '') + '.', failed ? 'error' : 'ok');
+      closeModal();
+      render();
+    });
+  });
+}
+
 function openTroubleModal(itemId) {
   const item = itemById(itemId);
   if (!item) return;
@@ -1170,16 +1209,29 @@ VIEWS.catalog = function () {
       ${lastLabelled.length ? `<button class="btn btn-quiet" data-act="unmark-labelled">Undo “marked as labelled”</button>` : ''}
       <button class="btn btn-quiet" data-act="print-shelflist">Print list</button>
     </div>
+    ${ui.picked.size ? `<div class="pick-bar">
+      <strong>${plural(ui.picked.size, 'book')} selected</strong>
+      <button class="btn" data-act="pick-genre">Set genre…</button>
+      ${shelvesList().length ? '<button class="btn" data-act="pick-shelf">Put on a shelf…</button>' : ''}
+      <button class="btn" data-act="pick-condition">Condition…</button>
+      <button class="btn btn-quiet" data-act="pick-labels">Print their labels</button>
+      <button class="btn btn-quiet" data-act="pick-none">Clear</button>
+    </div>` : ''}
     ${items.length ? `
     <table class="table">
-      <thead><tr><th></th><th>Title</th><th>Author</th><th>Genre</th><th>Status</th><th></th></tr></thead>
+      <thead><tr>
+        <th><input type="checkbox" id="pick-all" aria-label="Select every book listed"
+            ${items.length && items.every(i => ui.picked.has(i.id)) ? 'checked' : ''}></th>
+        <th></th><th>Title</th><th>Author</th><th>Genre</th><th>Status</th><th></th></tr></thead>
       <tbody>
         ${items.map(i => {
           const loan = activeLoanForItem(i.id);
           const who = loan ? patronById(loan.patronId) : null;
           const late = isOverdue(loan);
           const waiting = holdsForItem(i.id).length;
-          return `<tr>
+          return `<tr class="${ui.picked.has(i.id) ? 'row-picked' : ''}">
+            <td><input type="checkbox" class="pick" data-id="${i.id}" ${ui.picked.has(i.id) ? 'checked' : ''}
+                aria-label="Select ${esc(i.title)}"></td>
             <td>${coverHTML(i, 'cover-xs')}</td>
             <td><button class="link strong" data-act="desk-item" data-id="${i.id}">${esc(i.title)}</button>
                 ${waiting ? `<span class="pill">${waiting} waiting</span>` : ''}
@@ -1209,6 +1261,16 @@ VIEWS.catalog = function () {
 };
 
 AFTER.catalog = function () {
+  const listed = currentCatalogItems();
+  view.querySelectorAll('.pick').forEach(box => box.addEventListener('change', () => {
+    box.checked ? ui.picked.add(box.dataset.id) : ui.picked.delete(box.dataset.id);
+    render();
+  }));
+  const all = document.getElementById('pick-all');
+  if (all) all.addEventListener('change', () => {
+    listed.forEach(i => all.checked ? ui.picked.add(i.id) : ui.picked.delete(i.id));
+    render();
+  });
   document.getElementById('catalog-genre').addEventListener('change', e => { ui.catalogGenre = e.target.value; render(); });
   const shelfSel = document.getElementById('catalog-shelf');
   if (shelfSel) shelfSel.addEventListener('change', e => { ui.catalogShelf = e.target.value; render(); });
@@ -1249,11 +1311,18 @@ function emptyState(message, cta) {
 /* ============================== STUDENTS ============================== */
 
 VIEWS.patrons = function () {
-  const people = searchPatrons(ui.patronQuery, 500);
+  let people = searchPatrons(ui.patronQuery, 500);
+  if (ui.patronGroup === '__none__') people = people.filter(p => !p.group);
+  else if (ui.patronGroup) people = people.filter(p => normName(p.group) === normName(ui.patronGroup));
   return `
   <section class="pane">
     <div class="toolbar">
       <input id="patron-q" class="search" placeholder="Search students" value="${esc(ui.patronQuery)}" autocomplete="off">
+      ${patronGroups().length ? `<select id="patron-group" class="select" aria-label="Class">
+        <option value="">All classes</option>
+        ${patronGroups().map(g => `<option value="${esc(g)}" ${normName(g) === normName(ui.patronGroup) ? 'selected' : ''}>${esc(g)} (${DB.patrons.filter(p => normName(p.group) === normName(g)).length})</option>`).join('')}
+        <option value="__none__" ${ui.patronGroup === '__none__' ? 'selected' : ''}>No class set (${DB.patrons.filter(p => !p.group).length})</option>
+      </select>` : ''}
       <span class="spacer"></span>
       <button class="btn btn-primary" data-act="new-patron">Add a student</button>
     </div>
@@ -1279,6 +1348,8 @@ VIEWS.patrons = function () {
 };
 
 AFTER.patrons = function () {
+  const groupSel = document.getElementById('patron-group');
+  if (groupSel) groupSel.addEventListener('change', e => { ui.patronGroup = e.target.value; render(); });
   const q = document.getElementById('patron-q');
   q.addEventListener('input', debounce(e => { ui.patronQuery = e.target.value; render(); document.getElementById('patron-q').focus(); }, 180));
   q.focus();
@@ -1401,6 +1472,25 @@ VIEWS.reports = function () {
       </tr>`).join('')}</tbody>
     </table>` : ''}
 
+    ${patronGroups().length ? `<h2 class="section-title">By class</h2>
+    <table class="table">
+      <thead><tr><th>Class</th><th>Students</th><th>Out now</th><th>Overdue</th><th>Borrowed all year</th><th>Per student</th></tr></thead>
+      <tbody>${patronGroups().concat(DB.patrons.some(p => !p.group) ? ['(no class set)'] : []).map(g => {
+        const members = DB.patrons.filter(p => g === '(no class set)' ? !p.group : normName(p.group) === normName(g));
+        const out = members.reduce((n, p) => n + activeLoansForPatron(p.id).length, 0);
+        const late = members.reduce((n, p) => n + activeLoansForPatron(p.id).filter(isOverdue).length, 0);
+        const all = members.reduce((n, p) => n + loansForPatron(p.id).length, 0);
+        return `<tr>
+          <td><button class="link strong" data-act="report-class" data-id="${esc(g)}">${esc(g)}</button></td>
+          <td>${members.length}</td>
+          <td class="muted">${out || '—'}</td>
+          <td class="${late ? 'danger strong' : 'muted'}">${late || '—'}</td>
+          <td>${all}</td>
+          <td class="muted">${members.length ? (all / members.length).toFixed(1) : '—'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : ''}
+
     <h2 class="section-title">What students thought</h2>
     ${ratedReportHTML()}
 
@@ -1480,6 +1570,7 @@ VIEWS.settings = function () {
       ${field('Grace days before "overdue"', 'graceDays', s.graceDays, { type: 'number' })}
       ${field('Renewals allowed', 'maxRenewals', s.maxRenewals, { type: 'number' })}
       ${field('Books out at once (0 = no limit)', 'maxItems', s.maxItems, { type: 'number' })}
+      ${field('Where held books wait', 'holdSpot', s.holdSpot, { placeholder: 'e.g. the hold shelf by the door' })}
     </div>
     <label class="check">
       <input type="checkbox" name="autoCreatePatrons" ${s.autoCreatePatrons ? 'checked' : ''}>
@@ -1586,7 +1677,8 @@ Object.assign(ACTIONS, {
     const item = itemById(itemId);
     if (res.nextHold) {
       const who = patronById(res.nextHold.patronId);
-      toast('Checked in. Set it aside — ' + (who ? who.name : 'someone') + ' has a hold on it.', 'ok');
+      toast('Checked in. ' + (S().holdSpot ? 'Put it on ' + S().holdSpot + ' — ' : 'Set it aside — ')
+        + (who ? who.name : 'someone') + ' has a hold on it.', 'ok');
     } else {
       const home = item && item.shelfId ? shelfById(item.shelfId) : null;
       toast('Checked in' + (res.wasOverdue ? ' (was overdue)' : '') + ': ' + (item ? item.title : '') +
@@ -1700,7 +1792,26 @@ Object.assign(ACTIONS, {
   'cat-filter': key => { ui.catalogFilter = key; render(); },
   'cat-genre': genre => { ui.catalogGenre = genre; render(); },
   'cat-shelf': shelfId => { ui.catalogShelf = shelfId; ui.catalogFilter = 'all'; go('catalog'); },
+
+  'pick-none': () => { ui.picked.clear(); render(); },
+  'pick-labels': () => { openLabelsModal(); },
+  'pick-genre': () => bulkChange('Set the genre for ' + plural(ui.picked.size, 'book'),
+    `<label class="field"><span>Genre</span><select name="value">${genreOptionsHTML('')}</select></label>`,
+    (item, value) => updateItem(item.id, { genre: value === '__new__' ? '' : value })),
+  'pick-shelf': () => bulkChange('Put ' + plural(ui.picked.size, 'book') + ' on a shelf',
+    `<label class="field"><span>Shelf</span><select name="value">
+       <option value="">— no shelf —</option>
+       ${shelvesList().map(s => `<option value="${s.id}">${esc(s.code)}${s.genre ? ' — ' + esc(s.genre) : ''}</option>`).join('')}
+     </select></label>`,
+    (item, value) => value ? fileToShelf(item.id, value) : (delete item.shelfId, saveDB(), { ok: true })),
+  'pick-condition': () => bulkChange('Set the condition of ' + plural(ui.picked.size, 'book'),
+    `<label class="field"><span>Condition</span><select name="value">
+       <option value="">On the shelf</option>
+       ${Object.keys(ITEM_STATUSES).map(k => `<option value="${k}">${esc(ITEM_STATUSES[k])}</option>`).join('')}
+     </select></label>`,
+    (item, value) => setItemStatus(item.id, value)),
   'report-genre': genre => { ui.catalogGenre = genre; ui.catalogFilter = 'all'; ui.catalogQuery = ''; go('catalog'); },
+  'report-class': group => { ui.patronGroup = group === '(no class set)' ? '__none__' : group; ui.patronQuery = ''; go('patrons'); },
 
   'genre-add': () => {
     const input = document.getElementById('new-genre');
@@ -1776,6 +1887,7 @@ Object.assign(ACTIONS, {
       graceDays: num('graceDays', 0, 0),
       maxRenewals: num('maxRenewals', 0, 2),
       maxItems: num('maxItems', 0, 3),
+      holdSpot: get('holdSpot').value.trim(),
       autoCreatePatrons: get('autoCreatePatrons').checked
     });
     saveDB();

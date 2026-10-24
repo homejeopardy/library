@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
   barcodePrefix: 'CL',
   nextBarcode: 1,
   labelPresets: [],
+  holdSpot: '',
   // The classroom's own categories — rename, add or delete in Settings.
   genres: [
     'Adventure', 'Biography', 'Dystopian', 'Fantasy / Sci-Fi', 'Graphic Novels',
@@ -740,6 +741,13 @@ function setAttention(itemId, on, note, by) {
 
 const attentionItems = () => DB.items.filter(i => i.attention && !i.status)
   .sort((a, b) => new Date(b.attentionAt || 0) - new Date(a.attentionAt || 0));
+
+/* The classes students have been put in, for filtering and per-class reports. */
+function patronGroups() {
+  const seen = {};
+  DB.patrons.forEach(p => { const g = String(p.group || '').trim(); if (g) seen[normName(g)] = g; });
+  return Object.keys(seen).sort().map(k => seen[k]);
+}
 
 const troubledItems = () => DB.items.filter(i => i.status).sort((a, b) => new Date(b.statusAt || 0) - new Date(a.statusAt || 0));
 

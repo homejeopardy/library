@@ -121,7 +121,8 @@ function screenStudent() {
     </div>
     ${ready.map(h => {
       const it = itemById(h.itemId);
-      return `<p class="k-banner">🎉 <strong>${esc(it ? it.title : 'A book')}</strong> is back, and it's being saved for you. Ask your teacher for it!</p>`;
+      return `<p class="k-banner">🎉 <strong>${esc(it ? it.title : 'A book')}</strong> is back, and it's being saved for you.
+        ${S().holdSpot ? 'Look on ' + esc(S().holdSpot) + '.' : 'Ask your teacher for it!'}</p>`;
     }).join('')}
     <div class="k-box">
       <input id="k-input" class="k-input" autocomplete="off" spellcheck="false"
@@ -134,8 +135,12 @@ function screenStudent() {
         ${mine.length ? `<ul class="k-list">${mine.map(l => {
           const it = itemById(l.itemId);
           const late = isOverdue(l);
+          const renewable = (S().maxRenewals < 0 || (l.renewals || 0) < S().maxRenewals) && !nextHoldForItem(l.itemId);
           return `<li>${coverImg(it)}<span class="k-list-text"><strong>${esc(it ? it.title : '?')}</strong>
-            <span class="${late ? 'danger strong' : 'muted'}">${late ? 'Overdue — please bring it back' : 'Due ' + esc(fmtDateFull(l.dueAt))}</span></span></li>`;
+            <span class="${late ? 'danger strong' : 'muted'}">${late ? 'Overdue — please bring it back' : 'Due ' + esc(fmtDateFull(l.dueAt))}</span>
+            ${l.renewals ? `<span class="muted">Kept on ${l.renewals} time${l.renewals > 1 ? 's' : ''}</span>` : ''}</span>
+            ${renewable ? `<button class="btn" data-renew="${l.id}">Keep it longer</button>`
+              : `<span class="muted small">${nextHoldForItem(l.itemId) ? 'someone is waiting' : 'cannot be kept again'}</span>`}</li>`;
         }).join('')}</ul>` : '<p class="muted">You don\'t have any books right now.</p>'}
       </section>
       <section>
@@ -161,6 +166,17 @@ function screenStudent() {
     input.value = '';
     if (v) studentScan(v);
   });
+  main.querySelectorAll('[data-renew]').forEach(b => b.addEventListener('click', () => {
+    const res = renew(b.dataset.renew);
+    if (!res.ok) {
+      K.result = { tone: 'warn', html: /waiting|hold/i.test(res.error)
+        ? 'Someone else is waiting for that one, so it needs to come back.'
+        : "You've kept that one as long as you can. Bring it in and your teacher can help." };
+    } else {
+      K.result = { tone: 'ok', html: `Kept until <strong>${esc(fmtDateFull(res.loan.dueAt))}</strong>.` };
+    }
+    kRender();
+  }));
   main.querySelectorAll('[data-hold-cancel]').forEach(b => b.addEventListener('click', () => {
     cancelHold(b.dataset.holdCancel);
     K.result = { tone: 'info', html: 'Okay — you\'re out of line for that book.' };
@@ -280,7 +296,8 @@ function returnFromWelcome(item) {
 }
 
 function returnedMessage(item, res) {
-  if (res.nextHold) return `✓ Returned <strong>${esc(item.title)}</strong>. Someone is waiting for it — please give it to your teacher instead of the shelf.`;
+  if (res.nextHold) return `✓ Returned <strong>${esc(item.title)}</strong>. Someone is waiting for it —
+    ${S().holdSpot ? 'please put it on <strong>' + esc(S().holdSpot) + '</strong>' : 'please give it to your teacher'} instead of the shelf.`;
   return `✓ Returned <strong>${esc(item.title)}</strong>. Thank you!` + putItBackHTML(item);
 }
 
@@ -505,6 +522,67 @@ function clearResultSoon() {
   }, 8000);
 }
 
+/* ------------------------------ staff way in ------------------------------
+   A small corner link, not a secret. The password is the lock, and the way
+   in is temporary: leaving the admin page signs you straight back out, so a
+   classroom device is never left open.
+   -------------------------------------------------------------------------- */
+
+const STAFF_STEP = { step: 'name', name: '', account: null, error: '' };
+
+function openStaffGate(state) {
+  const g = Object.assign({}, STAFF_STEP, state || {});
+  const body = g.step === 'name'
+    ? `<label class="field"><span>Your name</span>
+         <input name="who" autocomplete="username" value="${esc(g.name)}" placeholder="e.g. Catherine"></label>`
+    : `<input class="sr-only" type="text" name="username" value="${esc(g.name)}" autocomplete="username" readonly tabindex="-1" aria-hidden="true">
+       <label class="field"><span>Password for ${esc(g.name)}</span>
+         <input name="password" type="password" autocomplete="current-password"></label>`;
+  main.innerHTML = `
+  <section class="k-card k-setup">
+    <h1>Staff sign in</h1>
+    <p class="hint">This signs you in only until you leave the library pages. Students carry on with
+      <button type="button" class="link" id="staff-cancel">the student screen</button>.</p>
+    <form class="key-form" id="staff-form" autocomplete="on">
+      ${body}
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">${g.step === 'name' ? 'Continue' : 'Sign in'}</button>
+        <button type="button" class="btn btn-quiet" id="staff-back">Back</button>
+      </div>
+      ${g.error ? `<p class="danger">${esc(g.error)}</p>` : ''}
+    </form>
+  </section>`;
+
+  const form = document.getElementById('staff-form');
+  const fail = message => openStaffGate(Object.assign({}, g, { error: message }));
+  document.getElementById('staff-cancel').addEventListener('click', kRender);
+  document.getElementById('staff-back').addEventListener('click', () => g.step === 'name' ? kRender() : openStaffGate({ name: g.name }));
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    try {
+      if (g.step === 'name') {
+        const typed = form.who.value.trim();
+        if (!typed) return fail('Type your name.');
+        const account = await Accounts.find(typed);
+        if (!account) return fail('There is no account for ' + typed + '.');
+        return openStaffGate({ step: 'password', name: account.name, account: account });
+      }
+      await Accounts.unlock(g.account, form.password.value);   // throws if the password is wrong
+      try {
+        localStorage.setItem('classroom-library-me', g.account.name);
+        localStorage.setItem('classroom-library-me-temp', '1');
+      } catch (err) { /* private mode */ }
+      location.href = '../';
+    } catch (err) {
+      fail(err.message);
+    }
+  });
+  const first = form.querySelector('input:not([readonly])');
+  if (first) first.focus();
+}
+
 /* ------------------------------ sync + idle ------------------------------ */
 
 function renderSyncPill() {
@@ -545,6 +623,8 @@ function poke() {
   }, IDLE_SECONDS * 1000);
 }
 ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, poke, true));
+
+document.getElementById('staff-link').addEventListener('click', () => openStaffGate());
 
 /* Keep the cursor in the box so a scan always lands somewhere. */
 document.addEventListener('click', e => {

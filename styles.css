@@ -633,6 +633,18 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .shelf-tally strong { font-size: 22px; font-weight: 650; }
 .shelf-tally span { font-size: 11px; color: var(--text-muted); }
 .scan-log tr.row-problem td { background: var(--danger-soft); }
+.pick-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+}
+.table tr.row-picked td { background: var(--accent-soft); }
+
 .shelf-chip {
   appearance: none;
   border: 1px solid var(--border);

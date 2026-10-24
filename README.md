@@ -339,6 +339,18 @@ A marked book stays in the catalog with all its history. It will not be checked 
 desk can still override), will not fill a hold, and the student station tells anyone who
 scans it to give it to you. **Back on the shelf** undoes all of that.
 
+## The staff way in, on a shared device
+
+The student station carries a small **Staff** link in the corner. It asks for your name and
+password — the same account you sign in with anywhere — and then opens the admin pages.
+
+That sign-in is **temporary on purpose**: leaving the admin page signs you straight out
+again, so the classroom device is never left open behind you. The top bar says **Done —
+back to students** rather than Sign out, and pressing it returns to the student screen.
+
+On your own computer nothing changes: go straight to the admin address and stay signed in
+until you sign out.
+
 ## Who can sign in
 
 **Settings → Who can sign in** lists the accounts. A new person signs in on a computer
@@ -352,6 +364,19 @@ encrypted with that person's password (AES-GCM, with the password stretched by P
 310,000 iterations), so the file gives nothing away on its own. Because it is public,
 **password strength is what protects the library** — eight characters is the floor, and a
 few unrelated words beat a short clever one.
+
+## Changing many books at once
+
+Tick books in the catalog — or the box in the header to take everything the filters are
+showing — and a bar appears offering to set the **genre**, put them **on a shelf**, change
+their **condition**, or print their labels. The dialog says how many books it will change
+before it does anything.
+
+## Classes
+
+A student's class is used, not just stored: the Students tab filters by it, and
+**Reports → By class** shows how many students each class has, what they have out, what is
+overdue and how much each class borrows per student.
 
 ## Needs attention
 
@@ -373,6 +398,15 @@ When a student returns a book at the station, up to three suggestions appear und
 same genre, on the shelf right now, nothing they have borrowed before, best rated first.
 A tie goes to whichever has gone out least, so a good book nobody has tried gets a turn.
 If the genre has nothing left to offer, it falls back to the whole collection.
+
+## Holds waiting somewhere
+
+**Settings → Where held books wait** takes a phrase like "the hold shelf by the door". When
+a held book is returned, the desk says to put it there, and the student who asked for it is
+told where to look instead of being sent to find you.
+
+Students can also **keep a book longer** from the station — the same renewal rules apply, so
+it refuses once the limit is reached or somebody else is waiting, and says which.
 
 ## Star ratings
 
