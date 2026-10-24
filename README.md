@@ -242,6 +242,33 @@ goes back on — which is the moment that matters. Students see the shelf code t
 relabelled. The session also offers a list of books the app expects on that shelf which you
 haven't scanned — checked out, mis-shelved, or simply not reached yet.
 
+### A shelf's own page
+
+Click a shelf code to open it: its books **in shelf order** with the call letters beside
+each, strays marked, when it was last filed, and buttons to file it, shelf-read it, print
+its card, or print its list as a paper checklist.
+
+**Shelf-read** is the second scanning mode. Scan the books left to right and each one is
+checked against the one before it, so a book out of alphabetical order is flagged as you go.
+
+**Move it all** sends every book on a shelf to another shelf, for when the room is
+rearranged. **Split it** is for a genre that has outgrown its shelf: give a letter and a new
+code, and everything sorting at or after that letter moves across, with both letter ranges
+set to match.
+
+### Keeping shelves honest
+
+The Shelves tab counts **books not on a shelf**, **books in the wrong genre** (every book
+whose genre differs from its shelf's, with a list), and **cards to reprint**. A card goes
+out of date when you change a shelf's code, place, genre or letters after printing it —
+**Print only the out-of-date cards** does just those.
+
+### What students see
+
+Returning a book at the station answers "where does this go?" in large type: the shelf code,
+the genre and its picture, and where the shelf is. Scanning a book that is already checked
+in says the same thing, so a student holding a stray can put it away without asking.
+
 ## Printing spine labels
 
 **Catalog → Print labels.** Each label is 0.66&Prime; wide and 1&Prime; tall, and carries, top to

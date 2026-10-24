@@ -143,3 +143,26 @@ body.kiosk { font-size: 17px; }
 .k-report-ask { font-size: 14px; }
 .k-report-opts { display: flex; flex-wrap: wrap; gap: 8px; }
 .k-report-opts .btn { font-size: 14px; padding: 9px 14px; }
+
+/* ---------------- where to put it back ---------------- */
+
+.k-putback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.k-putback-say { font-size: 15px; color: var(--text); }
+.k-putback-code {
+  font-family: var(--mono);
+  font-size: 34px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -.01em;
+  color: var(--text);
+}
+.k-putback-genre { display: inline-flex; align-items: center; gap: 6px; font-size: 19px; font-weight: 550; color: var(--text); }
+.k-putback-where { font-size: 14px; color: var(--text-muted); flex-basis: 100%; }

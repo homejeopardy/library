@@ -538,6 +538,18 @@ function addShelf(fields) {
   return { ok: true, shelf: shelf };
 }
 
+/* What a printed shelf card shows. Changing any of it makes the card on the
+   shelf wrong, which is worth knowing. */
+const CARD_FIELDS = ['code', 'name', 'genre', 'fromLetters', 'toLetters'];
+
+const shelfCardStale = shelf => !!shelf.cardPrintedAt && !!shelf.changedAt && shelf.changedAt > shelf.cardPrintedAt;
+
+function markShelfCardsPrinted(shelves) {
+  (shelves || []).forEach(s => { const shelf = shelfById(s.id); if (shelf) shelf.cardPrintedAt = nowISO(); });
+  saveDB();
+  return { ok: true };
+}
+
 function updateShelf(id, fields) {
   const shelf = shelfById(id);
   if (!shelf) return { ok: false, error: 'Shelf not found.' };
@@ -549,9 +561,11 @@ function updateShelf(id, fields) {
     fields.code = code;
   }
   ['fromLetters', 'toLetters'].forEach(k => { if (fields[k] != null) fields[k] = String(fields[k]).trim().toUpperCase(); });
+  const changedCard = CARD_FIELDS.some(k => fields[k] != null && String(fields[k]) !== String(shelf[k] || ''));
   Object.assign(shelf, fields);
+  if (changedCard) shelf.changedAt = nowISO();
   saveDB();
-  return { ok: true, shelf: shelf };
+  return { ok: true, shelf: shelf, cardNowWrong: changedCard && !!shelf.cardPrintedAt };
 }
 
 function deleteShelf(id) {
@@ -593,8 +607,56 @@ function fileToShelf(itemId, shelfId) {
   const moved = item.shelfId && item.shelfId !== shelfId ? shelfById(item.shelfId) : null;
   item.shelfId = shelfId;
   item.shelvedAt = nowISO();
+  shelf.lastFiledAt = nowISO();
   saveDB();
   return { ok: true, item: item, shelf: shelf, movedFrom: moved, issues: shelvingIssues(item, shelf) };
+}
+
+/* Books sitting on a shelf that holds a different genre. */
+function strayItems() {
+  return DB.items.filter(i => {
+    if (!i.shelfId || !i.genre) return false;
+    const shelf = shelfById(i.shelfId);
+    return shelf && shelf.genre && normName(shelf.genre) !== normName(i.genre);
+  });
+}
+
+const unshelvedItems = () => DB.items.filter(i => !i.shelfId);
+
+/* A shelf's books in the order they should sit on it. */
+const shelfContents = id => itemsOnShelf(id).sort((a, b) => {
+  const la = callLetters(a.title), lb = callLetters(b.title);
+  return la.localeCompare(lb) || byTitle(a, b);
+});
+
+/* Everything from one shelf onto another, for when the room is rearranged. */
+function moveShelfContents(fromId, toId) {
+  const from = shelfById(fromId), to = shelfById(toId);
+  if (!from || !to) return { ok: false, error: 'Shelf not found.' };
+  if (fromId === toId) return { ok: false, error: 'Those are the same shelf.' };
+  const moving = itemsOnShelf(fromId);
+  moving.forEach(i => { i.shelfId = toId; i.shelvedAt = nowISO(); });
+  if (moving.length) to.lastFiledAt = nowISO();
+  saveDB();
+  return { ok: true, count: moving.length, from: from, to: to };
+}
+
+/* A genre has outgrown its shelf: everything sorting at or after `letter`
+   moves to a new shelf, and both letter ranges are set to match. */
+function splitShelf(id, letter, newCode, newName) {
+  const shelf = shelfById(id);
+  if (!shelf) return { ok: false, error: 'Shelf not found.' };
+  const cut = String(letter || '').trim().toUpperCase();
+  if (!cut) return { ok: false, error: 'Say which letters move, e.g. LET.' };
+  const made = addShelf({ code: newCode, name: newName, genre: shelf.genre, fromLetters: cut, toLetters: shelf.toLetters });
+  if (!made.ok) return made;
+  const moving = shelfContents(id).filter(i => callLetters(i.title) >= cut);
+  moving.forEach(i => { i.shelfId = made.shelf.id; i.shelvedAt = nowISO(); });
+  const staying = shelfContents(id);
+  updateShelf(id, { toLetters: staying.length ? callLetters(staying[staying.length - 1].title) : '' });
+  if (moving.length) made.shelf.lastFiledAt = nowISO();
+  saveDB();
+  return { ok: true, moved: moving.length, shelf: made.shelf, from: shelf };
 }
 
 /* --- labels --- */

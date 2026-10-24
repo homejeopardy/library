@@ -272,7 +272,7 @@ function offerNewStudent(typed) {
 function returnFromWelcome(item) {
   if (item.status) { showResult('warn', `<strong>${esc(item.title)}</strong> is marked ${esc(statusLabel(item.status).toLowerCase())} — please give it to your teacher.`); return; }
   const loan = activeLoanForItem(item.id);
-  if (!loan) { showResult('info', `<strong>${esc(item.title)}</strong> is already checked in — you can put it back on the shelf${shelfHint(item)}.`); return; }
+  if (!loan) { showResult('info', `<strong>${esc(item.title)}</strong> is already checked in.` + putItBackHTML(item)); return; }
   const res = checkin(item.id);
   if (!res.ok) { showResult('warn', esc(res.error)); return; }
   showResult('ok', returnedMessage(item, res));
@@ -281,7 +281,19 @@ function returnFromWelcome(item) {
 
 function returnedMessage(item, res) {
   if (res.nextHold) return `✓ Returned <strong>${esc(item.title)}</strong>. Someone is waiting for it — please give it to your teacher instead of the shelf.`;
-  return `✓ Returned <strong>${esc(item.title)}</strong>. Thank you! Put it back on the shelf${shelfHint(item)}.`;
+  return `✓ Returned <strong>${esc(item.title)}</strong>. Thank you!` + putItBackHTML(item);
+}
+
+/* Where this goes, in type a student can read while holding the book. */
+function putItBackHTML(item) {
+  const shelf = item.shelfId && typeof shelfById === 'function' ? shelfById(item.shelfId) : null;
+  if (!shelf && !item.genre) return ' Put it back on the shelf.';
+  return `<div class="k-putback">
+    <span class="k-putback-say">Put it back${shelf ? ' on' : ' with the'}</span>
+    ${shelf ? `<span class="k-putback-code">${esc(shelf.code)}</span>` : ''}
+    <span class="k-putback-genre">${genreArt(item.genre, 26)}${esc(item.genre || '')}</span>
+    ${shelf && shelf.name ? `<span class="k-putback-where">${esc(shelf.name)}</span>` : ''}
+  </div>`;
 }
 
 function shelfHint(item) {
