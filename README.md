@@ -212,12 +212,17 @@ next ISBN, and suggests a genre for that book.
 bottom: the genre picture, the genre name in small type, the first three letters of the
 title in large type, and the book's barcode number.
 
+A range matches on the number inside a barcode, so `42`, `0042` and `CL-0042` all mean the
+same book, and a barcode that is really an ISBN sits far outside any small range.
+
 The three letters skip the small words a library files past — *The Lion, the Witch and the
 Wardrobe* becomes `LIO`, *Of Mice and Men* becomes `MIC`. Two books can end up with the
 same letters; the barcode number underneath tells them apart.
 
 **Printing:** choose the books currently listed in the catalog (so the search box and the
-genre filter decide what you get) or every book, and the order they come off the sheet —
+genre filter decide what you get) or every book, narrow that to a **range of barcode
+numbers** — leave either end blank for "no limit", and the dialog says how many books fall
+in the range as you type — and pick the order they come off the sheet:
 **barcode number** (the order you catalogued them, so labels match a stack of books),
 **genre then title** (one bin at a time), **title**, or **author then title**. Print onto full-sheet label paper — 11
 labels across, 10 down, 110 to a sheet — and cut along the hairline guides. Labels sit

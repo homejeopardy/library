@@ -143,3 +143,10 @@ function starsHTML(avg) {
   return '<span class="stars" role="img" aria-label="' + avg.toFixed(1) + ' out of 5 stars">' +
     '\u2605\u2605\u2605\u2605\u2605'.slice(0, full) + '\u2606\u2606\u2606\u2606\u2606'.slice(0, 5 - full) + '</span>';
 }
+
+/* The number inside a barcode, whatever dresses it up: "0042", "42" and
+   "CL-0042" are all 42. Returns null when there are no digits at all. */
+function barcodeNumber(barcode) {
+  const digits = String(barcode == null ? '' : barcode).replace(/\D/g, '');
+  return digits ? Number(digits) : null;
+}

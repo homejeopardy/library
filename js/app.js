@@ -1940,6 +1940,18 @@ async function guessMissingGenres(items, say) {
   return { done: done, offline: offline, noIsbn: noIsbn, tried: todo.length };
 }
 
+/* Keeps only the books whose barcode number falls between the two ends,
+   either of which may be left blank for "no limit". */
+function withinBarcodeRange(items, fromText, toText) {
+  const from = barcodeNumber(fromText), to = barcodeNumber(toText);
+  if (from === null && to === null) return items;
+  return items.filter(i => {
+    const n = barcodeNumber(i.barcode);
+    if (n === null) return false;              // nothing to compare against
+    return (from === null || n >= from) && (to === null || n <= to);
+  });
+}
+
 function openLabelsModal() {
   const listed = currentCatalogItems();
   const scopes = [
@@ -1947,15 +1959,27 @@ function openLabelsModal() {
     ['all', 'Every book (' + DB.items.length + ')', DB.items.slice()]
   ];
 
-  function draw(scopeKey, skip, summary, orderKey) {
+  function draw(scopeKey, skip, summary, orderKey, fromText, toText) {
     const scope = scopes.find(x => x[0] === scopeKey) || scopes[0];
     const order = LABEL_ORDERS.find(o => o[0] === orderKey) || LABEL_ORDERS[0];
-    const items = scope[2].slice().sort(order[2]);
+    const inRange = withinBarcodeRange(scope[2], fromText, toText);
+    const items = inRange.slice().sort(order[2]);
+    const backwards = barcodeNumber(fromText) !== null && barcodeNumber(toText) !== null
+      && barcodeNumber(fromText) > barcodeNumber(toText);
     const missing = items.filter(i => !i.genre).length;
     openModal('Print spine labels', `
       <label class="field"><span>Which books</span>
         <select name="scope">${scopes.map(x => `<option value="${x[0]}" ${x[0] === scopeKey ? 'selected' : ''}>${esc(x[1])}</option>`).join('')}</select>
       </label>
+      <div class="grid-2">
+        ${field('Barcodes from', 'from', fromText || '', { placeholder: 'first' })}
+        ${field('up to and including', 'to', toText || '', { placeholder: 'last' })}
+      </div>
+      <p class="hint" id="range-note">${backwards
+        ? 'The first number is higher than the second.'
+        : (barcodeNumber(fromText) !== null || barcodeNumber(toText) !== null)
+          ? esc(plural(items.length, 'book') + ' of the ' + scope[2].length + ' selected fall in that range.')
+          : 'Leave these blank for all of them, or set one end to run from or up to a number.'}</p>
       <label class="field"><span>In what order</span>
         <select name="order">${LABEL_ORDERS.map(o => `<option value="${o[0]}" ${o[0] === order[0] ? 'selected' : ''}>${esc(o[1])}</option>`).join('')}</select>
       </label>
@@ -1977,13 +2001,37 @@ function openLabelsModal() {
       const scopeSel = body.querySelector('[name="scope"]');
       const skipInput = body.querySelector('[name="skip"]');
       const orderSel = body.querySelector('[name="order"]');
-      const redraw = () => draw(scopeSel.value, Math.max(0, Number(skipInput.value) || 0), summary, orderSel.value);
+      const fromInput = body.querySelector('[name="from"]');
+      const toInput = body.querySelector('[name="to"]');
+      const redraw = () => draw(scopeSel.value, Math.max(0, Number(skipInput.value) || 0), summary,
+        orderSel.value, fromInput.value, toInput.value);
       scopeSel.addEventListener('change', redraw);
       skipInput.addEventListener('change', redraw);
       orderSel.addEventListener('change', redraw);
+      // A full redraw on every keystroke would steal the cursor, so while someone
+      // is still typing a number only the count and the button are updated.
+      [fromInput, toInput].forEach(input => {
+        input.addEventListener('change', redraw);
+        input.addEventListener('input', () => {
+          const picked = withinBarcodeRange(scope[2], fromInput.value, toInput.value);
+          const note = body.querySelector('#range-note');
+          const high = barcodeNumber(fromInput.value), low = barcodeNumber(toInput.value);
+          note.textContent = (high !== null && low !== null && high > low)
+            ? 'The first number is higher than the second.'
+            : (high !== null || low !== null)
+              ? plural(picked.length, 'book') + ' of the ' + scope[2].length + ' selected fall in that range.'
+              : 'Leave these blank for all of them, or set one end to run from or up to a number.';
+          const go = body.querySelector('#do-print');
+          go.textContent = 'Print ' + plural(picked.length, 'label');
+          go.disabled = !picked.length;
+        });
+      });
       body.querySelector('#do-print').addEventListener('click', () => {
+        // Read the boxes again in case they were typed in and never left.
+        const picked = withinBarcodeRange(scope[2], fromInput.value, toInput.value).slice().sort(order[2]);
+        if (!picked.length) { toast('No books in that range.', 'error'); return; }
         closeModal();
-        printLabels(items, Math.max(0, Number(skipInput.value) || 0));
+        printLabels(picked, Math.max(0, Number(skipInput.value) || 0));
       });
       const guess = body.querySelector('#guess-genres');
       if (guess) guess.addEventListener('click', async () => {
@@ -1994,11 +2042,11 @@ function openLabelsModal() {
           (res.done.length ? 'Filled in ' + plural(res.done.length, 'genre') + ': ' + res.done.join(', ') + '. Worth checking in the catalog.' : 'No genres could be worked out.') +
           (res.offline ? ' The lookup services could not be reached, so the rest were left alone.' : '') +
           (res.noIsbn ? ' ' + plural(res.noIsbn, 'book has', 'books have') + ' no ISBN to look up — set those by hand.' : ''),
-          orderSel.value);
+          orderSel.value, fromInput.value, toInput.value);
       });
     });
   }
-  draw('listed', 0, '', 'barcode');
+  draw('listed', 0, '', 'barcode', '', '');
 }
 
 /* ============================ SAMPLE DATA ============================ */
