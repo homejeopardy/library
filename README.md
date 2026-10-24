@@ -341,6 +341,18 @@ revealing it only for printing — left the browser to swap the whole app over t
 media, and not every browser does that faithfully. Opera showed a correct preview and
 then printed an empty job. A plain page avoids the question.
 
+### The font on paper
+
+Anything printed uses Helvetica, never the monospace face the app uses on screen.
+The system monospace faces (Menlo and its kin) embed into a print job in a way some
+printers cannot rasterise: the printer accepts the job, clicks, reports it complete,
+and produces nothing. It fails the same way from any app, because the font travels
+inside the document — a PDF saved from the app failed to print from Preview too.
+
+The swap is one line in the print rules (`:root { --mono: ... }`), so if a label or a
+shelf card ever needs the typewriter look back, change it there and test on paper
+before trusting it.
+
 Two things follow:
 
 - If your browser blocks pop-ups for the site, the sheet can't open in a tab. The app
