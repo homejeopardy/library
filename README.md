@@ -232,6 +232,12 @@ Everything is keyboard-driven and the window can be narrow, for working off a la
 shelf. Scanning a different shelf card moves you to that shelf. **Sound off** is there for
 a quiet room.
 
+Once books are filed, the catalog shows where each one lives: a shelf code beside its
+status, which filters the list to that shelf when clicked, plus a shelf menu in the toolbar
+(including **Not on a shelf**). Typing a shelf code in the search box finds its books. A
+book that is checked out shows its **home** shelf, and checking it in says which shelf it
+goes back on — which is the moment that matters. Students see the shelf code too.
+
 **Filing never changes a book's genre.** A stray is reported so you can move it, not quietly
 relabelled. The session also offers a list of books the app expects on that shelf which you
 haven't scanned — checked out, mis-shelved, or simply not reached yet.

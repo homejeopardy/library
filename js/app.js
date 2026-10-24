@@ -16,7 +16,7 @@ if (!ROUTES.includes(route)) route = 'circulation';
 
 /* Transient screen state (never persisted). */
 const circ = { item: null, patron: null, matches: null, busy: false };
-const ui = { catalogQuery: '', catalogFilter: 'all', catalogGenre: '', patronQuery: '' };
+const ui = { catalogQuery: '', catalogFilter: 'all', catalogGenre: '', catalogShelf: '', patronQuery: '' };
 
 const view = document.getElementById('view');
 const modal = document.getElementById('modal');
@@ -500,6 +500,7 @@ function circPanelHTML() {
         ${loan.renewals ? `<span class="muted">&middot; renewed ${loan.renewals}&times;</span>` : ''}
       </div>
       ${hold ? `<p class="note">On return, hold it for <strong>${esc((patronById(hold.patronId) || {}).name || '?')}</strong>.</p>` : ''}
+      ${shelfNoteHTML(item)}
       ${attentionNoteHTML(item)}
       <div class="actions">
         <button class="btn btn-primary" data-act="checkin" data-id="${item.id}" id="primary-action">Check in</button>
@@ -520,6 +521,7 @@ function circPanelHTML() {
       ${item.attention ? '<span class="badge badge-warn">Needs attention</span>' : ''}
       ${hold ? `<span>&middot; held for <strong>${esc((patronById(hold.patronId) || {}).name || '?')}</strong></span>` : ''}
     </div>
+    ${shelfNoteHTML(item)}
     ${attentionNoteHTML(item)}
     <div class="checkout-row">
       <label class="field">
@@ -539,6 +541,12 @@ function circPanelHTML() {
     </div>
     <p class="hint">${S().autoCreatePatrons ? 'A student who has never borrowed before is added automatically.' : 'New students must be added on the Students tab first.'}</p>
   </div>`;
+}
+
+function shelfNoteHTML(item) {
+  const shelf = item.shelfId ? shelfById(item.shelfId) : null;
+  if (!shelf) return '';
+  return `<p class="note">Lives on shelf <strong>${esc(shelf.code)}</strong>${shelf.name ? ' — ' + esc(shelf.name) : ''}.</p>`;
 }
 
 function attentionNoteHTML(item) {
@@ -1127,6 +1135,8 @@ function currentCatalogItems() {
   if (ui.catalogFilter === 'trouble') items = items.filter(i => i.status || i.attention);
   if (ui.catalogGenre === '__none__') items = items.filter(i => !i.genre);
   else if (ui.catalogGenre) items = items.filter(i => normName(i.genre) === normName(ui.catalogGenre));
+  if (ui.catalogShelf === '__none__') items = items.filter(i => !i.shelfId);
+  else if (ui.catalogShelf) items = items.filter(i => i.shelfId === ui.catalogShelf);
   return items;
 }
 
@@ -1140,6 +1150,11 @@ VIEWS.catalog = function () {
   <section class="pane">
     <div class="toolbar">
       <input id="catalog-q" class="search" placeholder="Search title, author, genre, tag or barcode" value="${esc(ui.catalogQuery)}" autocomplete="off">
+      ${shelvesList().length ? `<select id="catalog-shelf" class="select" aria-label="Shelf">
+        <option value="">All shelves</option>
+        ${shelvesList().map(s => `<option value="${s.id}" ${s.id === ui.catalogShelf ? 'selected' : ''}>${esc(s.code)}${s.genre ? ' — ' + esc(s.genre) : ''} (${itemsOnShelf(s.id).length})</option>`).join('')}
+        ${DB.items.some(i => !i.shelfId) ? `<option value="__none__" ${ui.catalogShelf === '__none__' ? 'selected' : ''}>Not on a shelf (${DB.items.filter(i => !i.shelfId).length})</option>` : ''}
+      </select>` : ''}
       <select id="catalog-genre" class="select" aria-label="Genre">
         <option value="">All genres</option>
         ${used.map(g => `<option value="${esc(g)}" ${normName(g) === normName(ui.catalogGenre) ? 'selected' : ''}>${esc(g)} (${booksInGenre(g).length})</option>`).join('')}
@@ -1178,8 +1193,9 @@ VIEWS.catalog = function () {
                  ${i.statusWith ? `<span class="muted small">last with ${esc(i.statusWith)}</span>` : ''}`
               : loan
                 ? `<span class="badge ${late ? 'badge-danger' : 'badge-warn'}">${late ? 'Overdue' : 'Out'}</span>
-                   <span class="muted small">${esc(who ? who.name : '?')} &middot; ${esc(fmtDate(loan.dueAt))}</span>`
-                : `<span class="badge badge-ok">On the shelf</span>`}</td>
+                   <span class="muted small">${esc(who ? who.name : '?')} &middot; ${esc(fmtDate(loan.dueAt))}</span>
+                   ${shelfChipHTML(i, 'home')}`
+                : `<span class="badge badge-ok">On the shelf</span> ${shelfChipHTML(i)}`}</td>
             <td class="row-actions">
               <button class="link" data-act="edit-item" data-id="${i.id}">Edit</button>
               <button class="link" data-act="hold-for" data-id="${i.id}">Hold</button>
@@ -1194,6 +1210,8 @@ VIEWS.catalog = function () {
 
 AFTER.catalog = function () {
   document.getElementById('catalog-genre').addEventListener('change', e => { ui.catalogGenre = e.target.value; render(); });
+  const shelfSel = document.getElementById('catalog-shelf');
+  if (shelfSel) shelfSel.addEventListener('change', e => { ui.catalogShelf = e.target.value; render(); });
   const q = document.getElementById('catalog-q');
   q.addEventListener('input', debounce(e => { ui.catalogQuery = e.target.value; render(); document.getElementById('catalog-q').focus(); }, 180));
   q.focus();
@@ -1205,6 +1223,14 @@ AFTER.catalog = function () {
 function genreTagHTML(genre) {
   if (!genre) return '';
   return `<span class="genre-tag">${genreArt(genre, 13)}${esc(genre)}</span>`;
+}
+
+/* The shelf a book lives on, as a chip that filters the catalog to that shelf. */
+function shelfChipHTML(item, prefix) {
+  const shelf = item.shelfId ? shelfById(item.shelfId) : null;
+  if (!shelf) return '';
+  return `<button class="shelf-chip mono" data-act="cat-shelf" data-id="${shelf.id}"
+    title="${esc(shelf.name || shelf.code)}">${prefix === 'home' ? 'home ' : ''}${esc(shelf.code)}</button>`;
 }
 
 function ratingLineHTML(item) {
@@ -1562,7 +1588,9 @@ Object.assign(ACTIONS, {
       const who = patronById(res.nextHold.patronId);
       toast('Checked in. Set it aside — ' + (who ? who.name : 'someone') + ' has a hold on it.', 'ok');
     } else {
-      toast('Checked in' + (res.wasOverdue ? ' (was overdue)' : '') + ': ' + (item ? item.title : ''), 'ok');
+      const home = item && item.shelfId ? shelfById(item.shelfId) : null;
+      toast('Checked in' + (res.wasOverdue ? ' (was overdue)' : '') + ': ' + (item ? item.title : '') +
+        (home ? ' — back on shelf ' + home.code + '.' : ''), 'ok');
     }
     resetCirc();
   },
@@ -1671,6 +1699,7 @@ Object.assign(ACTIONS, {
 
   'cat-filter': key => { ui.catalogFilter = key; render(); },
   'cat-genre': genre => { ui.catalogGenre = genre; render(); },
+  'cat-shelf': shelfId => { ui.catalogShelf = shelfId; ui.catalogFilter = 'all'; go('catalog'); },
   'report-genre': genre => { ui.catalogGenre = genre; ui.catalogFilter = 'all'; ui.catalogQuery = ''; go('catalog'); },
 
   'genre-add': () => {

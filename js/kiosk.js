@@ -285,6 +285,8 @@ function returnedMessage(item, res) {
 }
 
 function shelfHint(item) {
+  const shelf = item.shelfId && typeof shelfById === 'function' ? shelfById(item.shelfId) : null;
+  if (shelf) return ` on shelf <strong>${esc(shelf.code)}</strong>${item.genre ? ' with the ' + esc(item.genre) + ' ' + genreArt(item.genre, 15) + ' books' : ''}`;
   return item.genre ? ` with the <strong>${esc(item.genre)}</strong> ${genreArt(item.genre, 15)} books` : '';
 }
 
@@ -460,7 +462,11 @@ function showSearch(q) {
     let status, action = '';
     if (it.status) status = 'Not on the shelf right now';
     else if (mineOut) status = 'You have this one';
-    else if (!loan) status = 'On the shelf' + (it.genre ? ` — look in <strong>${esc(it.genre)}</strong> ${genreArt(it.genre, 15)}` : '');
+    else if (!loan) {
+      const shelf = it.shelfId && typeof shelfById === 'function' ? shelfById(it.shelfId) : null;
+      status = 'On the shelf' + (it.genre ? ` — look in <strong>${esc(it.genre)}</strong> ${genreArt(it.genre, 15)}` : '')
+        + (shelf ? ` <span class="mono">${esc(shelf.code)}</span>` : '');
+    }
     else if (inLine) status = `Checked out · you're number ${inLine} in line`;
     else {
       status = 'Checked out · ' + (isOverdue(loan) ? 'should be back soon' : 'back ' + esc(fmtDate(loan.dueAt)));

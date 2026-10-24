@@ -633,6 +633,19 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .shelf-tally strong { font-size: 22px; font-weight: 650; }
 .shelf-tally span { font-size: 11px; color: var(--text-muted); }
 .scan-log tr.row-problem td { background: var(--danger-soft); }
+.shelf-chip {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.shelf-chip:hover { border-color: var(--accent); color: var(--accent); }
 
 /* A shelf card: the code carries across the room, the barcode is for the scanner. */
 .shelf-card {

@@ -182,6 +182,7 @@ function searchItems(q) {
     normName(i.author).includes(n) ||
     normName(i.tags ? i.tags.join(' ') : '').includes(n) ||
     normName(i.genre).includes(n) ||
+    (i.shelfId && shelfById && shelfById(i.shelfId) && normCode(shelfById(i.shelfId).code) === normCode(q)) ||
     (c && normCode(i.barcode).includes(c)) ||
     (c && normCode(i.isbn).includes(c))
   ).sort(byTitle);
