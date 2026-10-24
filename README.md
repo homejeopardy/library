@@ -219,6 +219,10 @@ The three letters skip the small words a library files past — *The Lion, the W
 Wardrobe* becomes `LIO`, *Of Mice and Men* becomes `MIC`. Two books can end up with the
 same letters; the barcode number underneath tells them apart.
 
+Sorting by genre also offers **start each genre on a new page**, so a sheet only ever holds
+one bin's labels and no cut row belongs to two genres. The last sheet of each genre is
+part-used, which costs a few labels.
+
 **Printing:** choose the books currently listed in the catalog (so the search box and the
 genre filter decide what you get) or every book, narrow that to a **range of barcode
 numbers** — leave either end blank for "no limit", and the dialog says how many books fall

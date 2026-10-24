@@ -1917,9 +1917,22 @@ function labelHTML(item) {
   </div>`;
 }
 
-function printLabels(items, skip) {
+/* Each run of labels becomes its own sheet, and print CSS throws a page
+   between sheets — so splitting by genre means one bin per page and no
+   cut row ever belongs to two bins. */
+function printLabels(items, skip, splitByGenre) {
   const blanks = Array(Math.max(0, skip || 0)).fill('<div class="spine-label blank"></div>').join('');
-  printHTML(`<div class="label-sheet">${blanks}${items.map(labelHTML).join('')}</div>`);
+  let runs = [items];
+  if (splitByGenre) {
+    runs = [];
+    items.forEach(i => {
+      const last = runs[runs.length - 1];
+      if (last && normName(last[0].genre) === normName(i.genre)) last.push(i);
+      else runs.push([i]);
+    });
+  }
+  printHTML(runs.map((run, n) =>
+    `<div class="label-sheet">${n === 0 ? blanks : ''}${run.map(labelHTML).join('')}</div>`).join(''));
 }
 
 /* Books with no genre: ask the lookup services what they are, and take the
@@ -1959,7 +1972,7 @@ function openLabelsModal() {
     ['all', 'Every book (' + DB.items.length + ')', DB.items.slice()]
   ];
 
-  function draw(scopeKey, skip, summary, orderKey, fromText, toText) {
+  function draw(scopeKey, skip, summary, orderKey, fromText, toText, splitByGenre) {
     const scope = scopes.find(x => x[0] === scopeKey) || scopes[0];
     const order = LABEL_ORDERS.find(o => o[0] === orderKey) || LABEL_ORDERS[0];
     const inRange = withinBarcodeRange(scope[2], fromText, toText);
@@ -1983,6 +1996,10 @@ function openLabelsModal() {
       <label class="field"><span>In what order</span>
         <select name="order">${LABEL_ORDERS.map(o => `<option value="${o[0]}" ${o[0] === order[0] ? 'selected' : ''}>${esc(o[1])}</option>`).join('')}</select>
       </label>
+      ${order[0] === 'genre' ? `<label class="check">
+        <input type="checkbox" name="split" ${splitByGenre ? 'checked' : ''}>
+        <span>Start each genre on a new page, so a sheet only ever holds one bin</span>
+      </label>` : ''}
       <label class="field"><span>Skip this many spaces on the sheet</span>
         <input name="skip" type="number" min="0" max="109" value="${skip}">
       </label>
@@ -1996,15 +2013,20 @@ function openLabelsModal() {
         <button type="button" class="btn btn-primary" id="do-print" ${items.length ? '' : 'disabled'}>Print ${plural(items.length, 'label')}</button>
         <button type="button" class="btn btn-quiet" data-close>Cancel</button>
       </div>
-      <p class="hint">Print onto full-sheet label paper, then cut along the guide lines. ${LABELS_PER_ROW} across, 10 down — ${LABELS_PER_ROW * 10} to a sheet.</p>
+      <p class="hint">Print onto full-sheet label paper, then cut along the guide lines.
+        ${LABELS_PER_ROW} across, 10 down — ${LABELS_PER_ROW * 10} to a sheet.
+        ${order[0] === 'genre' && splitByGenre ? 'Each genre starts its own page, so the last sheet of a genre is part-used.' : ''}
+        Set your printer to actual size, not “fit to page”.</p>
     `, body => {
       const scopeSel = body.querySelector('[name="scope"]');
       const skipInput = body.querySelector('[name="skip"]');
       const orderSel = body.querySelector('[name="order"]');
       const fromInput = body.querySelector('[name="from"]');
       const toInput = body.querySelector('[name="to"]');
+      const splitBox = body.querySelector('[name="split"]');
       const redraw = () => draw(scopeSel.value, Math.max(0, Number(skipInput.value) || 0), summary,
-        orderSel.value, fromInput.value, toInput.value);
+        orderSel.value, fromInput.value, toInput.value, splitBox ? splitBox.checked : splitByGenre);
+      if (splitBox) splitBox.addEventListener('change', redraw);
       scopeSel.addEventListener('change', redraw);
       skipInput.addEventListener('change', redraw);
       orderSel.addEventListener('change', redraw);
@@ -2031,7 +2053,8 @@ function openLabelsModal() {
         const picked = withinBarcodeRange(scope[2], fromInput.value, toInput.value).slice().sort(order[2]);
         if (!picked.length) { toast('No books in that range.', 'error'); return; }
         closeModal();
-        printLabels(picked, Math.max(0, Number(skipInput.value) || 0));
+        printLabels(picked, Math.max(0, Number(skipInput.value) || 0),
+          order[0] === 'genre' && splitBox && splitBox.checked);
       });
       const guess = body.querySelector('#guess-genres');
       if (guess) guess.addEventListener('click', async () => {
@@ -2042,7 +2065,7 @@ function openLabelsModal() {
           (res.done.length ? 'Filled in ' + plural(res.done.length, 'genre') + ': ' + res.done.join(', ') + '. Worth checking in the catalog.' : 'No genres could be worked out.') +
           (res.offline ? ' The lookup services could not be reached, so the rest were left alone.' : '') +
           (res.noIsbn ? ' ' + plural(res.noIsbn, 'book has', 'books have') + ' no ISBN to look up — set those by hand.' : ''),
-          orderSel.value, fromInput.value, toInput.value);
+          orderSel.value, fromInput.value, toInput.value, splitBox ? splitBox.checked : splitByGenre);
       });
     });
   }

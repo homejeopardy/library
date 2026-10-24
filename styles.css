@@ -673,6 +673,7 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
   .topbar, .view, .toasts, #modal { display: none !important; }
   /* Hairline cut guides; labels sit edge to edge so one cut serves two. */
   .spine-label { border: 0.25pt solid #bbb; margin: 0 -0.125pt -0.125pt 0; }
+  .label-sheet + .label-sheet { break-before: page; page-break-before: always; }
   .spine-label.blank * { visibility: hidden; }
   .print-area { display: block; color: #000; background: #fff; font-size: 12pt; }
   .notice { page-break-after: always; padding: 24px 0; }
