@@ -375,7 +375,8 @@ function shelfCardHTML(shelf) {
 }
 
 function printShelfCards(shelves) {
-  printHTML(`<div class="shelf-sheet">${shelves.map(shelfCardHTML).join('')}</div>`);
+  printHTML(`<div class="shelf-sheet">${shelves.map(shelfCardHTML).join('')}</div>`,
+    shelves.length === 1 ? 'Shelf card ' + shelves[0].code : 'Shelf cards');
 }
 
 Object.assign(ACTIONS, {
@@ -440,7 +441,7 @@ Object.assign(ACTIONS, {
           <td>${stray ? esc(i.genre) : loan ? 'out on loan' : i.status ? esc(statusLabel(i.status)) : 'here'}</td></tr>`;
       }).join('')}</tbody></table>
       <p class="notice-foot">Printed ${esc(fmtDateFull(nowISO()))}</p>
-    </section>`);
+    </section>`, 'Shelf ' + shelf.code);
   },
 
   'shelf-strays': () => {

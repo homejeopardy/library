@@ -330,17 +330,23 @@ how many are **on the shelf right now** — books that are out, lost or damaged 
 counted. Tapping one lists up to twelve, best rated first, with books the student has
 already read pushed to the bottom, and each one's shelf code so they know where to walk.
 
-## If a print job comes out blank
+## How printing works
 
-Everything printable is built as its own sheet and handed to the printer, so the
-app's own screen is hidden while printing. Two consequences are worth knowing:
+Every print button opens the sheet in **a tab of its own** and brings up the print box
+for it. The tab holds nothing but what you are printing, so what you see is what comes
+out, and **Save as PDF** in the print box keeps a copy. Closing the tab changes nothing.
 
-- **Print from the app's buttons**, not from File → Print or Cmd-P. Pressing Cmd-P
-  without choosing something first used to send one blank page; it now prints a short
-  note listing the buttons instead.
-- A sheet is handed over only once the page has laid it out and any covers have
-  arrived, so a job can take a moment to appear with a few hundred labels. If a cover
-  can't be fetched the label still prints, after a few seconds' wait at most.
+It works this way because the earlier approach — keeping the sheet hidden on the page and
+revealing it only for printing — left the browser to swap the whole app over to print
+media, and not every browser does that faithfully. Opera showed a correct preview and
+then printed an empty job. A plain page avoids the question.
+
+Two things follow:
+
+- If your browser blocks pop-ups for the site, the sheet can't open in a tab. The app
+  falls back to the old way and says so; allowing pop-ups for the site restores it.
+- Printing from File → Print or Cmd-P on the app's own page doesn't print what's on
+  screen — it prints a short note listing the buttons that do print.
 
 ## Printing spine labels
 

@@ -2176,19 +2176,57 @@ shared drives and out of the hands of students.</p>
 
 /* ============================== PRINTING ============================== */
 
-/* Printing a sheet that was built in this same tick. Two things have to happen
-   first, or the browser spools a job with nothing in it and reports it finished:
-   the page has to lay the new content out, and anything it pulls in has to arrive. */
-async function printHTML(html) {
+/* A sheet goes to a tab of its own. Printing it from a hidden corner of this page
+   meant the browser had to swap the whole app over to print media first, and not
+   every browser does that faithfully: Opera showed a correct preview and then spooled
+   an empty job. A plain page with nothing hidden prints, and saves as a PDF, anywhere.
+
+   window.open has to happen in the same tick as the click that asked for it, or it is
+   taken for a pop-up and blocked — so nothing may be awaited above it. */
+function printHTML(html, title) {
+  const tab = window.open('', '_blank');
+  if (!tab) { stageAndPrint(html); return; }
+
+  const sheets = [...document.querySelectorAll('link[rel="stylesheet"]')].map(l => l.href);
+  const key = /Mac/i.test(navigator.userAgent) ? 'Cmd' : 'Ctrl';
+  tab.document.write(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${esc(title || 'Print')}</title>
+${sheets.map(href => `<link rel="stylesheet" href="${esc(href)}">`).join('\n')}
+<style>
+  /* This page is nothing but the sheet, so it looks on screen as it will on paper. */
+  body { margin: 0; padding: 0.25in; background: #fff; color: #000; }
+  .print-tip { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #444; background: #f3f3f3; border-radius: 6px; padding: 8px 12px; margin: 0 0 14px; }
+  @media print { body { padding: 0; } .print-tip { display: none; } }
+</style>
+</head>
+<body>
+<p class="print-tip">If the print box didn't open by itself, press ${key}-P. To keep a copy,
+  choose <strong>Save as PDF</strong> in that box. Closing this tab changes nothing.</p>
+${html}
+<script>
+addEventListener('load', function () { setTimeout(function () { print(); }, 200); });
+<\/script>
+</body>
+</html>`);
+  tab.document.close();
+}
+
+/* Only if pop-ups are blocked: print from the hidden sheet on this page, the old way.
+   The content still has to be laid out and its pictures fetched before the job goes. */
+async function stageAndPrint(html) {
   const area = document.getElementById('print-area');
   area.innerHTML = html;
-  document.body.classList.add('has-print-sheet');
 
   /* One frame to apply the change, a second to be sure it has been laid out. */
   await new Promise(go => requestAnimationFrame(() => requestAnimationFrame(go)));
   await settled(area);
 
   if (!area.firstElementChild) { toast('There was nothing to print.', 'error'); return; }
+  toast('Allow pop-ups for this site and the sheet will open in its own tab instead.', 'info');
   window.print();
 }
 
@@ -2228,7 +2266,6 @@ window.addEventListener('beforeprint', () => {
 /* Don't leave a sheet staged, or the next print would quietly repeat the last one. */
 window.addEventListener('afterprint', () => {
   document.getElementById('print-area').innerHTML = '';
-  document.body.classList.remove('has-print-sheet');
 });
 
 function printOverdueNotices() {
@@ -2254,7 +2291,7 @@ function printOverdueNotices() {
       <p class="notice-foot">Printed ${esc(fmtDateFull(nowISO()))}</p>
     </section>`;
   }).join('');
-  printHTML(html);
+  printHTML(html, 'Overdue notices');
 }
 
 /* Grouped by genre, so the printout doubles as a checklist for sorting bins. */
@@ -2280,7 +2317,7 @@ function printShelfList() {
     </table>`).join('')}
     <p class="notice-foot">Printed ${esc(fmtDateFull(nowISO()))}</p>
   </section>`;
-  printHTML(html);
+  printHTML(html, 'Shelf list');
 }
 
 /* ----------------------------- spine labels -----------------------------
@@ -2331,7 +2368,8 @@ function printLabels(items, skip, splitByGenre) {
     });
   }
   printHTML(runs.map((run, n) =>
-    `<div class="label-sheet">${n === 0 ? blanks : ''}${run.map(labelHTML).join('')}</div>`).join(''));
+    `<div class="label-sheet">${n === 0 ? blanks : ''}${run.map(labelHTML).join('')}</div>`).join(''),
+    'Spine labels');
 }
 
 /* Books with no genre: ask the lookup services what they are, and take the
