@@ -42,7 +42,7 @@ const GENRE_SET_2_MAP = {
 };
 
 function blankDB() {
-  return { version: 1, items: [], shelves: [], patrons: [], loans: [], holds: [], reviews: [], activity: [], settings: Object.assign({}, DEFAULT_SETTINGS) };
+  return { version: 1, items: [], shelves: [], patrons: [], loans: [], holds: [], reviews: [], requests: [], activity: [], settings: Object.assign({}, DEFAULT_SETTINGS) };
 }
 
 /* A book is on the shelf unless something has happened to it. */
@@ -75,7 +75,7 @@ function migrate(parsed) {
   db.settings = Object.assign({}, DEFAULT_SETTINGS, parsed.settings || {});
   if (!Array.isArray(db.settings.genres)) db.settings.genres = DEFAULT_SETTINGS.genres.slice();
   if (!Array.isArray(db.settings.labelPresets)) db.settings.labelPresets = [];
-  ['items', 'shelves', 'patrons', 'loans', 'holds', 'reviews', 'activity'].forEach(k => { if (!Array.isArray(db[k])) db[k] = []; });
+  ['items', 'shelves', 'patrons', 'loans', 'holds', 'reviews', 'requests', 'activity'].forEach(k => { if (!Array.isArray(db[k])) db[k] = []; });
 
   // The free-text "shelf / location" field became a genre. A location that names a genre
   // becomes that genre; anything else is kept in the book's notes rather than lost.
@@ -795,6 +795,35 @@ function similarBooks(itemId, patronId, max) {
       (timesOut[a.item.id] || 0) - (timesOut[b.item.id] || 0) ||
       byTitle(a.item, b.item))
     .slice(0, max || 3);
+}
+
+/* --- what students wish you had --- */
+
+const openRequests = () => DB.requests.filter(r => !r.doneAt).sort((a, b) => new Date(b.at) - new Date(a.at));
+
+function addRequest(what, patronId) {
+  const text = String(what || '').trim();
+  if (text.length < 2) return { ok: false, error: 'Type the book you would like.' };
+  const patron = patronId ? patronById(patronId) : null;
+  const already = openRequests().find(r => normName(r.what) === normName(text));
+  if (already) {
+    already.votes = (already.votes || 1) + 1;
+    if (patron && !(already.who || []).includes(patron.name)) already.who = (already.who || []).concat(patron.name);
+    saveDB();
+    return { ok: true, request: already, seconded: true };
+  }
+  const request = { id: uid('req'), what: text, who: patron ? [patron.name] : [], votes: 1, at: nowISO(), doneAt: null };
+  DB.requests.push(request);
+  saveDB();
+  return { ok: true, request: request, seconded: false };
+}
+
+function closeRequest(id) {
+  const r = DB.requests.find(x => x.id === id);
+  if (!r) return { ok: false, error: 'Not found.' };
+  r.doneAt = nowISO();
+  saveDB();
+  return { ok: true };
 }
 
 /* --- genres --- */

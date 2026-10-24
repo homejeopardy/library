@@ -23,6 +23,7 @@ REPOS = ("homejeopardy/library-data", "homejeopardy/library-accounts")
 KEY = "test-key"
 files = {}          # path -> bytes
 commits = []        # (path, message)
+history = {}        # path -> [{sha, message, date, data}], newest last
 state = {"latency": 0, "down": False}
 lock = threading.Lock()
 
@@ -94,11 +95,26 @@ class Handler(BaseHTTPRequestHandler):
         rest = path[len("/repos/" + repo):]
         if rest == "" and method == "GET":
             return self.reply(200, {"full_name": repo, "private": repo.endswith("-data")})
+        if rest.startswith("/commits"):
+            wanted = parse_qs(urlparse(self.path).query).get("path", [None])[0]
+            key = repo + "/" + (wanted or "")
+            out = [{"sha": v["sha"], "commit": {"message": v["message"], "author": {"date": v["date"]}}}
+                   for v in reversed(history.get(key, []))]
+            return self.reply(200, out)
         if not rest.startswith("/contents/"):
             return self.reply(404, {"message": "Not Found"})
         name = repo + "/" + rest[len("/contents/"):]
         with lock:
             if method == "GET":
+                ref = parse_qs(urlparse(self.path).query).get("ref", [None])[0]
+                if ref:
+                    for version in history.get(name, []):
+                        if version["sha"] == ref:
+                            import base64 as _b
+                            return self.reply(200, {"type": "file", "encoding": "base64", "size": len(version["data"]),
+                                                    "name": name, "path": name, "sha": version["sha"],
+                                                    "content": _b.b64encode(version["data"]).decode()})
+                    return self.reply(404, {"message": "No commit found for the ref"})
                 if name not in files:
                     return self.reply(404, {"message": "Not Found"})
                 data = files[name]
@@ -121,6 +137,9 @@ class Handler(BaseHTTPRequestHandler):
                 data = base64.b64decode(body["content"])
                 files[name] = data
                 commits.append((name, body.get("message", "")))
+                history.setdefault(name, []).append({
+                    "sha": blob_sha(data), "message": body.get("message", ""),
+                    "date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "data": data})
                 return self.reply(200 if exists else 201, {"content": {"name": name, "path": name, "sha": blob_sha(data)},
                                                            "commit": {"message": body.get("message", "")}})
         return self.reply(405, {"message": "Method not allowed"})

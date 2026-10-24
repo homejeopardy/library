@@ -28,7 +28,7 @@ const Sync = (function () {
   const BASE_KEY = 'classroom-library-synced';
   const FILES = {
     catalog: { path: 'catalog.json', keys: ['items', 'shelves', 'settings'] },
-    circulation: { path: 'circulation.json', keys: ['patrons', 'loans', 'holds', 'reviews'] }
+    circulation: { path: 'circulation.json', keys: ['patrons', 'loans', 'holds', 'reviews', 'requests'] }
   };
 
   let base = readBase();          // { catalog: {sha, etag, data}, circulation: {...} }
@@ -166,9 +166,16 @@ const Sync = (function () {
     return { sha: meta.sha, etag: res.headers.get('ETag'), data: pick(data, FILES[name].keys) };
   }
 
+  /* Whoever is signed in on this device, so the history says who changed what. */
+  function who() {
+    const me = lsGet('classroom-library-me');
+    if (me) return me;
+    return ROLE === 'student' ? 'Student station' : 'Admin';
+  }
+
   async function putFile(name, data, sha) {
     const body = {
-      message: (ROLE === 'student' ? 'Student station' : 'Admin') + ': update ' + FILES[name].path,
+      message: who() + ': update ' + FILES[name].path,
       content: toB64(serialize(data))
     };
     if (sha) body.sha = sha;
@@ -304,6 +311,35 @@ const Sync = (function () {
     return Object.keys(FILES).some(n => canon(pick(DB, FILES[n].keys)) !== canon(base[n].data));
   }
 
+  /* ---------- earlier versions ---------- */
+
+  /* Every save is a commit, so the repository is the undo history. */
+  async function history(name, limit) {
+    const res = await gh('/commits?path=' + encodeURIComponent(FILES[name].path) + '&per_page=' + (limit || 25));
+    if (!res.ok) throw httpFail(res);
+    return (await res.json()).map(c => ({
+      sha: c.sha,
+      at: c.commit && c.commit.author ? c.commit.author.date : '',
+      message: c.commit ? c.commit.message : '',
+      who: (c.commit && c.commit.message || '').split(':')[0]
+    }));
+  }
+
+  /* The contents of a file as it stood at one commit. */
+  async function fileAt(name, sha) {
+    const res = await gh('/contents/' + FILES[name].path + '?ref=' + encodeURIComponent(sha));
+    if (!res.ok) throw httpFail(res);
+    const meta = await res.json();
+    let b64 = meta.content;
+    if (!b64 && meta.size > 0) {
+      const blob = await gh('/git/blobs/' + meta.sha);
+      if (!blob.ok) throw httpFail(blob);
+      b64 = (await blob.json()).content;
+    }
+    try { return pick(JSON.parse(fromB64(b64 || '')), FILES[name].keys); }
+    catch (e) { throw fail('data', 'That saved version could not be read.'); }
+  }
+
   /* ---------- connecting a device ---------- */
 
   /* Checks the key and looks at what's already in the shared library.
@@ -404,6 +440,7 @@ const Sync = (function () {
     role: ROLE, repo: repo, configured: configured, hasEverSynced: hasEverSynced, key: accessKey,
     pairingURL: pairingURL, keyFromOtherPage: keyFromOtherPage, handedOver: () => handedOver,
     status: () => status, describe: describe, pendingChanges: pendingChanges,
+    history: history, fileAt: fileAt, files: () => Object.keys(FILES),
     syncNow: syncNow, connect: connect, adopt: adopt, disconnect: disconnect,
     stationOnly: stationOnly,
     // exposed for tests

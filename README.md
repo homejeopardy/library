@@ -46,6 +46,16 @@ library, kept in a private GitHub repository.
   to the list themselves when they return something with a torn page.
 - **What to read next** — returning a book at the station suggests others in the same
   genre that are on the shelf right now, best rated first.
+- **Browse by genre** — the station's home screen shows a tile per genre with a live count
+  of what's actually on the shelf, so a student with nothing in mind can start there.
+- **Book requests** — students can ask for a book the library doesn't have. A second student
+  asking for the same title adds their name to it rather than making a second entry.
+- **Stocktake** — the Shelves tab shows how much of the room is on a shelf, which shelves have
+  never been filed, and which haven't been touched in a month.
+- **Returns box** — scan a pile of books back in one after another, in one list, with a tally.
+- **Who did what** — every save carries the name of whoever made it.
+- **Rewind** — every save is a version you can read back. See what changed between two
+  versions in plain words, and put back one book or the whole library.
 - **Undo** — the last few desk actions can be reversed with one click.
 - **Exports** — catalog and loan history as CSV, plus a full JSON backup.
 
@@ -269,6 +279,57 @@ Returning a book at the station answers "where does this go?" in large type: the
 the genre and its picture, and where the shelf is. Scanning a book that is already checked
 in says the same thing, so a student holding a stray can put it away without asking.
 
+### Stocktake
+
+The top of the Shelves tab says how many of your books are on a shelf, as a count and a bar.
+Under it: shelves that have **never been filed**, and shelves **not filed in a month**, each
+named. It is the fastest way to see what is left to do without walking the room.
+
+While you are shelf-reading, the shelf's own tally shows how many you have scanned, how many
+need looking at, and how many belong on that shelf — and **n books not seen yet** lists the
+ones you haven't reached.
+
+## The returns box
+
+**Circulation → Returns box.** For the pile that builds up overnight. Scan them one after
+another without clearing between each; every book lands in one list with a running tally,
+and anything that needs you — a hold, a book marked lost, a book that wasn't out — is
+flagged in place rather than interrupting the next scan.
+
+## Books students have asked for
+
+The station's home screen has an **Ask for a book** tile. A student types a title and it
+lands in **Reports → Books students have asked for**, newest first, with the names of
+everyone who asked. A second student asking for the same title adds their name and a vote
+instead of creating a second row, so a book five people want sorts to the top.
+
+Tick one off when you've ordered or found it, and it leaves the list.
+
+## Rewind
+
+**Settings → Earlier versions.** Every sync writes a version, so the library has a history.
+Pick a version and the app says what changed between then and now in plain words — *"Legend
+was deleted"*, *"The Giver: title changed from The Givre"* — rather than showing you JSON.
+
+From there you can put back **one book** or **the whole library**. Putting the whole library
+back is itself a save, so it too can be rewound; nothing is ever lost by going back.
+
+Each version is labelled with who saved it, which is also what makes a shared library
+readable later — see below.
+
+## Who did what
+
+Every save is signed with the name of whoever is signed in on that device, so the history
+reads *"Catherine: update catalog"* rather than a row of identical entries. The station
+signs its saves as **Student station**.
+
+## Browsing by genre at the station
+
+Under the name box, students see a tile per genre with the genre's picture and a count of
+how many are **on the shelf right now** — books that are out, lost or damaged aren't
+counted. Tapping one lists up to twelve, best rated first, with books the student has
+already read pushed to the bottom, and each one's shelf code so they know where to walk.
+
 ## Printing spine labels
 
 **Catalog → Print labels.** Each label is 0.66&Prime; wide and 1&Prime; tall, and carries, top to
@@ -480,12 +541,17 @@ js/store.js         the data model and every rule (loans, holds, limits, merges,
 js/sync.js          GitHub sync: fetch, three-way merge, write, retry
 js/genre-art.js     the genre drawings, inlined for printing
 js/kiosk.js         the student page
-js/lookup.js    ISBN → book data (Open Library, then Google Books), and genre hints
+js/lookup.js        ISBN → book data (Open Library, then Google Books), and genre hints
 js/app.js           admin page: routing, views, and the circulation desk
+js/accounts.js      password-locked copies of the key, so a cleared browser can recover
+js/shelving.js      shelves, shelf-reading, stocktake and shelf cards
+js/barcode.js       Code 39 barcodes as SVG
 genre-icons/        one SVG per genre (source for js/genre-art.js)
 dev/mock_github_api.py  a local stand-in for GitHub's API, for testing sync
 dev/build_genre_art.py  regenerates js/genre-art.js from genre-icons/
 dev/genre-icons.html    every icon at icon, tag and label size
+dev/serve.py            a no-cache dev server for the local copy
+dev/shelf-labels.html   the shelf card layouts, to compare on paper
 ```
 
 Plain JavaScript with no framework and no build step, so the whole thing stays editable

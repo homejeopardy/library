@@ -633,6 +633,11 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .shelf-tally strong { font-size: 22px; font-weight: 650; }
 .shelf-tally span { font-size: 11px; color: var(--text-muted); }
 .scan-log tr.row-problem td { background: var(--danger-soft); }
+.stocktake { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; }
+.stocktake-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin: 8px 0 4px; }
+.bar span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+
 .pick-bar {
   display: flex;
   align-items: center;

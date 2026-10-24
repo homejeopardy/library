@@ -64,7 +64,8 @@ function shelfListHTML() {
         : 'No shelves yet. Add one below, print its card, and stick it on the shelf.'}</p>
     </div>
 
-    ${shelves.length ? `<div class="tiles">
+    ${shelves.length ? `${stocktakeHTML(shelves)}
+    <div class="tiles">
       ${tile(unshelvedItems().length, 'not on a shelf')}
       ${tile(strayItems().length, 'in the wrong genre', strayItems().length ? 'danger' : '')}
       ${tile(shelves.filter(shelfCardStale).length, 'cards to reprint')}
@@ -95,6 +96,28 @@ function shelfListHTML() {
       ${unshelvedItems().length ? `<button class="btn btn-quiet" data-act="shelf-unshelved">${plural(unshelvedItems().length, 'book')} with no shelf</button>` : ''}
     </div>
   </section>`;
+}
+
+/* How much of the room has been got through, and which shelves are waiting. */
+function stocktakeHTML(shelves) {
+  const filed = DB.items.filter(i => i.shelfId).length;
+  const total = DB.items.length;
+  const share = total ? Math.round(filed / total * 100) : 0;
+  const never = shelves.filter(s => !s.lastFiledAt);
+  const monthAgo = addDays(new Date(), -30).toISOString();
+  const stale = shelves.filter(s => s.lastFiledAt && s.lastFiledAt < monthAgo);
+  return `<div class="stocktake">
+    <div class="stocktake-head">
+      <strong>${filed} of ${total} books are on a shelf</strong>
+      <span class="muted">${share}%</span>
+    </div>
+    <div class="bar"><span style="width:${share}%"></span></div>
+    <p class="hint">
+      ${never.length ? plural(never.length, 'shelf', 'shelves') + ' never filed (' + never.map(s => esc(s.code)).join(', ') + '). ' : ''}
+      ${stale.length ? plural(stale.length, 'shelf has', 'shelves have') + ' not been filed in a month (' + stale.map(s => esc(s.code)).join(', ') + '). ' : ''}
+      ${!never.length && !stale.length ? 'Every shelf has been filed in the last month.' : ''}
+    </p>
+  </div>`;
 }
 
 /* ------------------------------ one shelf ------------------------------ */

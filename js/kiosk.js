@@ -100,10 +100,73 @@ function screenWelcome() {
       <ul id="k-suggest" class="k-suggest" role="listbox" hidden></ul>
     </div>
     <div id="k-result">${resultHTML()}</div>
+    ${genreTilesHTML()}
   </section>`;
   const input = document.getElementById('k-input');
   wireNameBox(input);
+  wireBrowse();
   input.focus();
+}
+
+/* Tiles for a student with nothing particular in mind. */
+function genreTilesHTML() {
+  const counts = {};
+  DB.items.forEach(i => {
+    if (!i.genre || i.status || activeLoanForItem(i.id)) return;
+    counts[i.genre] = (counts[i.genre] || 0) + 1;
+  });
+  const genres = Object.keys(counts).sort();
+  if (!genres.length) return '';
+  return `<div class="k-browse">
+    <span class="k-browse-head">Browse the shelves</span>
+    <div class="k-tiles">
+      ${genres.map(g => `<button type="button" class="k-tile" data-browse="${esc(g)}">
+        ${genreArt(g, 26)}<span class="k-tile-name">${esc(g)}</span><span class="k-tile-count">${counts[g]} in</span>
+      </button>`).join('')}
+      <button type="button" class="k-tile k-tile-wish" data-wish="1">＋<span class="k-tile-name">Ask for a book</span></button>
+    </div>
+  </div>`;
+}
+
+function wireBrowse() {
+  main.querySelectorAll('[data-browse]').forEach(b => b.addEventListener('click', () => showGenre(b.dataset.browse)));
+  const wish = main.querySelector('[data-wish]');
+  if (wish) wish.addEventListener('click', askForBook);
+}
+
+function showGenre(genre) {
+  const here = DB.items.filter(i => normName(i.genre) === normName(genre) && !i.status && !activeLoanForItem(i.id));
+  const read = new Set(K.student ? loansForPatron(K.student.id).map(l => l.itemId) : []);
+  const picks = here.map(i => ({ item: i, rating: itemRating(i.id) }))
+    .sort((a, b) => (read.has(a.item.id) ? 1 : 0) - (read.has(b.item.id) ? 1 : 0) ||
+      (b.rating ? b.rating.avg : 0) - (a.rating ? a.rating.avg : 0) || byTitle(a.item, b.item));
+  showResult('plain', `<span class="k-also-head">${esc(genre)} — ${plural(here.length, 'book')} on the shelf now</span>
+    <ul class="k-list">${picks.slice(0, 12).map(p => `<li>${coverImg(p.item)}<span class="k-list-text">
+      <strong>${esc(p.item.title)}</strong><span class="muted">${esc(p.item.author || '')}</span>
+      ${p.rating ? `<span class="k-rating">${starsHTML(p.rating.avg)} <span class="muted">${p.rating.avg.toFixed(1)}</span></span>` : ''}
+      ${read.has(p.item.id) ? '<span class="muted">you have read this</span>' : ''}
+      ${p.item.shelfId && shelfById(p.item.shelfId) ? `<span class="muted">Shelf <strong>${esc(shelfById(p.item.shelfId).code)}</strong></span>` : ''}
+    </span></li>`).join('')}</ul>
+    ${picks.length > 12 ? `<p class="muted">…and ${picks.length - 12} more. Type a title above to find one.</p>` : ''}`);
+}
+
+function askForBook() {
+  showResult('info', `<span class="k-rate-ask">Is there a book you wish we had?</span>
+    <div class="k-box"><input id="k-wish" class="k-input" placeholder="Book title, and the author if you know it" autocomplete="off"></div>`,
+    `<button type="button" class="btn btn-primary" data-send="1">Ask for it</button>`,
+    box => {
+      const input = box.querySelector('#k-wish');
+      const send = () => {
+        const res = addRequest(input.value, K.student ? K.student.id : null);
+        if (!res.ok) { toast(res.error, 'error'); input.focus(); return; }
+        showResult('ok', res.seconded
+          ? `Someone had already asked for <strong>${esc(res.request.what)}</strong> — you have added your name to it.`
+          : `Thanks! <strong>${esc(res.request.what)}</strong> is on the list for your teacher to see.`);
+      };
+      box.querySelector('[data-send]').addEventListener('click', send);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+      input.focus();
+    });
 }
 
 function screenStudent() {
@@ -129,6 +192,7 @@ function screenStudent() {
              placeholder="Scan a book — or type a title to find one" aria-label="Scan a book, or type a title to find one">
     </div>
     <div id="k-result">${resultHTML()}</div>
+    ${genreTilesHTML()}
     <div class="k-columns">
       <section>
         <h2>Your books</h2>
@@ -166,6 +230,7 @@ function screenStudent() {
     input.value = '';
     if (v) studentScan(v);
   });
+  wireBrowse();
   main.querySelectorAll('[data-renew]').forEach(b => b.addEventListener('click', () => {
     const res = renew(b.dataset.renew);
     if (!res.ok) {

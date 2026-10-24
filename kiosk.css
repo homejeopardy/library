@@ -180,3 +180,35 @@ body.kiosk { font-size: 17px; }
   cursor: pointer;
 }
 .staff-link:hover { color: var(--text); background: var(--surface-2); }
+
+/* ---------------- browsing the shelves ---------------- */
+
+.k-browse { margin-top: 22px; }
+.k-browse-head {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.k-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.k-tile {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+.k-tile:hover { border-color: var(--accent); color: var(--accent); }
+.k-tile-name { font-size: 13px; font-weight: 550; line-height: 1.2; }
+.k-tile-count { font-size: 11px; color: var(--text-muted); }
+.k-tile-wish { font-size: 22px; color: var(--text-muted); }

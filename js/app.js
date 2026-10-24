@@ -15,7 +15,7 @@ let route = (location.hash || '').replace('#', '') || 'circulation';
 if (!ROUTES.includes(route)) route = 'circulation';
 
 /* Transient screen state (never persisted). */
-const circ = { item: null, patron: null, matches: null, busy: false };
+const circ = { item: null, patron: null, matches: null, busy: false, returnsBox: false, returned: [] };
 const ui = { catalogQuery: '', catalogFilter: 'all', catalogGenre: '', catalogShelf: '', patronQuery: '', patronGroup: '', picked: new Set() };
 
 const view = document.getElementById('view');
@@ -159,6 +159,107 @@ function syncSettingsHTML() {
     </div>
     <p class="hint">When the key expires, paste a new one below on this computer, then re-open the links above on the others.</p>
     ${keyFormHTML('Update key', false)}`;
+}
+
+/* --------------------------- earlier versions ---------------------------
+   The data repository keeps every save, so it is also the undo history. This
+   reads a version, says plainly what differs from now, and puts back either
+   the whole library or one book.
+   ------------------------------------------------------------------------- */
+
+function describeDifference(oldItems, nowItems) {
+  const was = new Map(oldItems.map(i => [i.id, i]));
+  const now = new Map(nowItems.map(i => [i.id, i]));
+  const added = nowItems.filter(i => !was.has(i.id));
+  const removed = oldItems.filter(i => !now.has(i.id));
+  const changed = nowItems.filter(i => was.has(i.id) && JSON.stringify(was.get(i.id)) !== JSON.stringify(i));
+  return { added: added, removed: removed, changed: changed, was: was };
+}
+
+function openHistoryModal() {
+  openModal('Earlier versions', '<p class="muted">Reading the history…</p>', async body => {
+    let versions;
+    try { versions = await Sync.history('catalog', 25); }
+    catch (e) { body.innerHTML = `<p class="danger">${esc(e.message)}</p>`; return; }
+    if (!versions.length) { body.innerHTML = '<p class="muted">Nothing saved yet.</p>'; return; }
+    body.innerHTML = `
+      <p class="hint">The ${plural(versions.length, 'most recent save', 'most recent saves')} of your books and settings.</p>
+      <ul class="mini-list">${versions.map((v, n) => `<li>
+        <span>${esc(fmtDateFull(v.at))} <span class="muted">${esc(new Date(v.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}</span></span>
+        <span class="muted small">${esc(v.who || 'someone')}${n === 0 ? ' · the version you have now' : ''}</span>
+        ${n === 0 ? '' : `<span class="row-actions"><button type="button" class="link" data-version="${esc(v.sha)}">See what changed</button></span>`}
+      </li>`).join('')}</ul>
+      <div class="actions"><button type="button" class="btn btn-quiet" data-close>Close</button></div>`;
+    body.querySelectorAll('[data-version]').forEach(btn =>
+      btn.addEventListener('click', () => openVersionModal(btn.dataset.version, versions.find(v => v.sha === btn.dataset.version))));
+  });
+}
+
+function openVersionModal(sha, version) {
+  openModal('Version from ' + fmtDateFull(version.at), '<p class="muted">Fetching that version…</p>', async body => {
+    let old;
+    try { old = await Sync.fileAt('catalog', sha); }
+    catch (e) { body.innerHTML = `<p class="danger">${esc(e.message)}</p>`; return; }
+    const diff = describeDifference(old.items || [], DB.items);
+    const nothing = !diff.added.length && !diff.removed.length && !diff.changed.length;
+    body.innerHTML = `
+      <p>Saved by <strong>${esc(version.who || 'someone')}</strong>, ${esc(fmtDateFull(version.at))}.</p>
+      ${nothing ? '<p class="muted">Nothing about the books differs from what you have now.</p>' : `
+        <p>Since then: <strong>${diff.added.length}</strong> added, <strong>${diff.removed.length}</strong> removed,
+           <strong>${diff.changed.length}</strong> changed.</p>
+        ${diff.changed.length ? `<h3 class="section-title">Changed since</h3>
+          <ul class="mini-list">${diff.changed.slice(0, 25).map(i => `<li>
+            <span>${esc(i.title)}</span>
+            <span class="muted small">${esc(describeBookChange(diff.was.get(i.id), i))}</span>
+            <span class="row-actions"><button type="button" class="link" data-restore="${esc(i.id)}">Put this one back</button></span>
+          </li>`).join('')}</ul>
+          ${diff.changed.length > 25 ? `<p class="hint">…and ${diff.changed.length - 25} more.</p>` : ''}` : ''}
+        ${diff.removed.length ? `<h3 class="section-title">Gone since</h3>
+          <ul class="mini-list">${diff.removed.slice(0, 15).map(i => `<li><span>${esc(i.title)}</span>
+            <span class="row-actions"><button type="button" class="link" data-restore="${esc(i.id)}">Put it back</button></span></li>`).join('')}</ul>` : ''}`}
+      <div class="actions">
+        <button type="button" class="btn btn-danger" id="restore-all" ${nothing ? 'disabled' : ''}>Put the whole library back to this</button>
+        <button type="button" class="btn btn-quiet" data-close>Close</button>
+      </div>`;
+
+    body.querySelectorAll('[data-restore]').forEach(btn => btn.addEventListener('click', () => {
+      const wanted = (old.items || []).find(i => i.id === btn.dataset.restore);
+      if (!wanted) return;
+      const at = DB.items.findIndex(i => i.id === wanted.id);
+      at === -1 ? DB.items.push(JSON.parse(JSON.stringify(wanted))) : (DB.items[at] = JSON.parse(JSON.stringify(wanted)));
+      saveDB();
+      toast('"' + wanted.title + '" put back as it was.', 'ok');
+      btn.closest('li').remove();
+      render();
+    }));
+
+    body.querySelector('#restore-all').addEventListener('click', () => {
+      if (!confirm('Put every book and setting back to how they were on ' + fmtDateFull(version.at) + '?\n\n' +
+        diff.added.length + ' book(s) added since would go, and ' + diff.changed.length + ' change(s) would be undone.\n' +
+        'This itself becomes a new version, so it can be undone too.')) return;
+      DB.items = JSON.parse(JSON.stringify(old.items || []));
+      if (old.settings) DB.settings = Object.assign({}, DEFAULT_SETTINGS, old.settings);
+      if (old.shelves) DB.shelves = JSON.parse(JSON.stringify(old.shelves));
+      saveDB();
+      toast('The library is back to ' + fmtDateFull(version.at) + '.', 'ok');
+      closeModal();
+      render();
+    });
+  });
+}
+
+/* A short, plain summary of what is different about one book. */
+function describeBookChange(was, now) {
+  if (!was) return 'added since';
+  const named = { title: 'title', author: 'author', genre: 'genre', barcode: 'barcode', status: 'condition', shelfId: 'shelf' };
+  const parts = Object.keys(named).filter(k => (was[k] || '') !== (now[k] || '')).map(k => {
+    if (k === 'shelfId') {
+      const from = was.shelfId && shelfById(was.shelfId), to = now.shelfId && shelfById(now.shelfId);
+      return 'shelf ' + (from ? from.code : 'none') + ' → ' + (to ? to.code : 'none');
+    }
+    return named[k] + ' ' + (was[k] || '—') + ' → ' + (now[k] || '—');
+  });
+  return parts.length ? parts.join(', ') : 'something else changed';
 }
 
 /* ------------------------------ signing in ------------------------------
@@ -464,6 +565,9 @@ VIEWS.circulation = function () {
       <label class="scan-label" for="scan">Scan a barcode &mdash; or type an ISBN, title, or student name</label>
       <input id="scan" class="scan" autocomplete="off" spellcheck="false"
              placeholder="Scan or type, then press Enter" aria-describedby="scan-hint">
+      <p class="hint">
+        <button class="link" data-act="returns-box">${circ.returnsBox ? 'Leave the returns box' : 'Emptying the returns box?'}</button>
+      </p>
       <p id="scan-hint" class="hint">
         ${DB.items.length ? plural(DB.items.length, 'book') + ' in the collection &middot; ' + out + ' out' + (over ? ' &middot; <strong class="danger">' + over + ' overdue</strong>' : '') : 'No books yet — scan an ISBN or <a href="#" data-act="new-item">add one by hand</a>.'}
       </p>
@@ -474,6 +578,7 @@ VIEWS.circulation = function () {
 };
 
 function circPanelHTML() {
+  if (circ.returnsBox) return returnsBoxHTML();
   if (circ.matches) return matchesHTML();
   if (!circ.item) return `<div class="empty-desk">
       <p class="empty-desk-icon" aria-hidden="true">📖</p>
@@ -569,6 +674,29 @@ function attentionNoteHTML(item) {
     <span class="muted">&middot; ${esc(fmtDate(item.attentionAt))}${item.attentionBy ? ', reported by ' + esc(item.attentionBy) : ''}</span></p>`;
 }
 
+/* Scanning a pile of returned books: every scan checks in and says where it
+   goes, with nothing to confirm between books. */
+function returnsBoxHTML() {
+  return `
+  <div class="card">
+    <div class="status-row">
+      <span class="badge badge-ok">Returns box</span>
+      <span class="muted">Scan each book. They check in as you go.</span>
+    </div>
+    ${circ.returned.length ? `<table class="table scan-log">
+      <tbody>${circ.returned.map((r, n) => `<tr class="${r.problem ? 'row-problem' : ''}">
+        <td class="muted small">${circ.returned.length - n}</td>
+        <td><strong>${esc(r.title)}</strong><div class="mono small muted">${esc(r.barcode)}</div></td>
+        <td>${r.shelf ? `<span class="shelf-chip mono">${esc(r.shelf)}</span>` : '<span class="muted small">no shelf</span>'}</td>
+        <td>${r.note ? `<span class="${r.problem ? 'danger' : 'muted'} small">${esc(r.note)}</span>` : '<span class="badge badge-ok">In</span>'}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<p class="muted">Nothing scanned yet.</p>'}
+    <div class="actions">
+      <button class="btn" data-act="returns-box">Done${circ.returned.length ? ' — ' + plural(circ.returned.length, 'book') + ' back in' : ''}</button>
+    </div>
+  </div>`;
+}
+
 function itemHeadHTML(item) {
   return `
   <div class="item-head">
@@ -656,6 +784,8 @@ async function handleScan(raw) {
   const value = String(raw || '').trim();
   if (!value) return;
 
+  if (circ.returnsBox) { returnsBoxScan(value); return; }
+
   const shelf = typeof findShelfByScan === 'function' ? findShelfByScan(value) : null;
   if (shelf) { ACTIONS['shelf-open'](shelf.id); toast('Filing shelf ' + shelf.code + '.', 'info'); return; }
 
@@ -690,6 +820,32 @@ async function handleScan(raw) {
   render();
   toast('Nothing found for "' + value + '".', 'error');
   openItemModal(null, '', value);
+}
+
+function returnsBoxScan(code) {
+  const item = findItemByCode(code);
+  if (!item) {
+    circ.returned.unshift({ title: 'Not in the library', barcode: code, problem: true, note: 'Unknown barcode.' });
+    render();
+    return;
+  }
+  const shelf = item.shelfId ? shelfById(item.shelfId) : null;
+  const loan = activeLoanForItem(item.id);
+  if (!loan) {
+    circ.returned.unshift({ title: item.title, barcode: item.barcode, shelf: shelf && shelf.code,
+      note: 'Was not checked out — just shelve it.' });
+    render();
+    return;
+  }
+  const res = checkin(item.id);
+  const holder = res.nextHold ? patronById(res.nextHold.patronId) : null;
+  circ.returned.unshift({
+    title: item.title, barcode: item.barcode, shelf: shelf && shelf.code,
+    problem: !!res.nextHold || res.wasOverdue,
+    note: res.nextHold ? 'Hold for ' + (holder ? holder.name : 'someone') + (S().holdSpot ? ' — ' + S().holdSpot : '')
+      : res.wasOverdue ? 'Was overdue' : ''
+  });
+  render();
 }
 
 /* --- student autocomplete --- */
@@ -1491,6 +1647,17 @@ VIEWS.reports = function () {
       }).join('')}</tbody>
     </table>` : ''}
 
+    ${openRequests().length ? `<h2 class="section-title">Books students have asked for</h2>
+    <table class="table">
+      <thead><tr><th>What they asked for</th><th>Asked by</th><th>When</th><th></th></tr></thead>
+      <tbody>${openRequests().map(r => `<tr>
+        <td><strong>${esc(r.what)}</strong>${r.votes > 1 ? ` <span class="pill">${r.votes} asks</span>` : ''}</td>
+        <td class="muted small">${esc((r.who || []).join(', ') || '—')}</td>
+        <td class="muted small">${esc(fmtDate(r.at))}</td>
+        <td class="row-actions"><button class="link" data-act="request-done" data-id="${r.id}">Tick it off</button></td>
+      </tr>`).join('')}</tbody>
+    </table>` : ''}
+
     <h2 class="section-title">What students thought</h2>
     ${ratedReportHTML()}
 
@@ -1587,6 +1754,13 @@ VIEWS.settings = function () {
       Accounts live in <code>${esc(Accounts.repo())}</code>; the password is never stored anywhere.</p>
     <div id="accounts-list" class="muted">Loading…</div>
 
+    <h2 class="section-title">Earlier versions</h2>
+    ${Sync.configured()
+      ? `<p class="hint">Every save is kept. Open one to see what is different from now, and put back
+           the whole library or a single book. Nothing is lost by looking.</p>
+         <div class="actions"><button class="btn" data-act="history-open">Show earlier versions</button></div>`
+      : '<p class="hint">Turn on sync above and every save becomes a version you can go back to.</p>'}
+
     <h2 class="section-title">Genres</h2>
     <p class="hint">These are the choices in the Genre menu when you add a book. Renaming a genre updates every book in it; renaming one onto another merges them.</p>
     <ul class="genre-admin">
@@ -1666,6 +1840,15 @@ function storageSize() {
 
 Object.assign(ACTIONS, {
   'clear-desk': () => resetCirc(),
+  'returns-box': () => {
+    const n = circ.returned.length;
+    circ.returnsBox = !circ.returnsBox;
+    if (!circ.returnsBox && n) toast(plural(n, 'book') + ' put back in.', 'ok');
+    circ.returned = [];
+    circ.item = null;
+    render();
+    focusScan();
+  },
 
   'pick-item': id => { circ.item = itemById(id); circ.matches = null; render(); },
 
@@ -1811,6 +1994,7 @@ Object.assign(ACTIONS, {
      </select></label>`,
     (item, value) => setItemStatus(item.id, value)),
   'report-genre': genre => { ui.catalogGenre = genre; ui.catalogFilter = 'all'; ui.catalogQuery = ''; go('catalog'); },
+  'request-done': id => { closeRequest(id); toast('Taken off the list.', 'ok'); render(); },
   'report-class': group => { ui.patronGroup = group === '(no class set)' ? '__none__' : group; ui.patronQuery = ''; go('patrons'); },
 
   'genre-add': () => {
@@ -1935,6 +2119,8 @@ shared drives and out of the hands of students.</p>
     toast(st.state === 'ok' ? 'Up to date.' : st.detail, st.state === 'ok' ? 'ok' : 'error');
     render();
   },
+  'history-open': () => openHistoryModal(),
+
   'account-reset': async user => {
     if (!confirm('Reset ' + user + "'s password? They pick a new one next time they sign in on a computer that is already connected.")) return;
     try {
