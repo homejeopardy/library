@@ -332,14 +332,14 @@ already read pushed to the bottom, and each one's shelf code so they know where 
 
 ## How printing works
 
-Every print button opens the sheet in **a tab of its own** and brings up the print box
-for it. The tab holds nothing but what you are printing, so what you see is what comes
-out, and **Save as PDF** in the print box keeps a copy. Closing the tab changes nothing.
+Every print button builds its sheet into a hidden area of the page and prints that, with
+the app's own screen hidden for the duration. Printing waits for the sheet to be laid out
+and for any covers to arrive before the job goes out, so a browser can't spool a document
+with nothing in it. **Save as PDF** in the print box names the file after the sheet —
+Spine labels, Shelf list, Overdue notices, Shelf cards.
 
-It works this way because the earlier approach — keeping the sheet hidden on the page and
-revealing it only for printing — left the browser to swap the whole app over to print
-media, and not every browser does that faithfully. Opera showed a correct preview and
-then printed an empty job. A plain page avoids the question.
+Printing from File → Print or Cmd-P on the app's own page doesn't print what's on screen:
+it prints a short note listing the buttons that do print.
 
 ### The font on paper
 

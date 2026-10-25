@@ -2176,50 +2176,10 @@ shared drives and out of the hands of students.</p>
 
 /* ============================== PRINTING ============================== */
 
-/* A sheet goes to a tab of its own. Printing it from a hidden corner of this page
-   meant the browser had to swap the whole app over to print media first, and not
-   every browser does that faithfully: Opera showed a correct preview and then spooled
-   an empty job. A plain page with nothing hidden prints, and saves as a PDF, anywhere.
-
-   window.open has to happen in the same tick as the click that asked for it, or it is
-   taken for a pop-up and blocked — so nothing may be awaited above it. */
-function printHTML(html, title) {
-  const tab = window.open('', '_blank');
-  if (!tab) { stageAndPrint(html); return; }
-
-  const sheets = [...document.querySelectorAll('link[rel="stylesheet"]')].map(l => l.href);
-  const key = /Mac/i.test(navigator.userAgent) ? 'Cmd' : 'Ctrl';
-  tab.document.write(`<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>${esc(title || 'Print')}</title>
-${sheets.map(href => `<link rel="stylesheet" href="${esc(href)}">`).join('\n')}
-<style>
-  /* This page is nothing but the sheet, so it looks on screen as it will on paper —
-     including the monospace swap, so what you see here is what comes out. */
-  :root { --mono: Monaco, "Courier New", Courier, monospace; }
-  body { margin: 0; padding: 0.25in; background: #fff; color: #000; }
-  .print-tip { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    color: #444; background: #f3f3f3; border-radius: 6px; padding: 8px 12px; margin: 0 0 14px; }
-  @media print { body { padding: 0; } .print-tip { display: none; } }
-</style>
-</head>
-<body>
-<p class="print-tip">If the print box didn't open by itself, press ${key}-P. To keep a copy,
-  choose <strong>Save as PDF</strong> in that box. Closing this tab changes nothing.</p>
-${html}
-<script>
-addEventListener('load', function () { setTimeout(function () { print(); }, 200); });
-<\/script>
-</body>
-</html>`);
-  tab.document.close();
-}
-
-/* Only if pop-ups are blocked: print from the hidden sheet on this page, the old way.
-   The content still has to be laid out and its pictures fetched before the job goes. */
-async function stageAndPrint(html) {
+/* The sheet is built on this page and printed from here. It has to be laid out, and
+   its pictures fetched, before the job goes out: a browser that spools from the layout
+   it already has would otherwise send a document with nothing in it. */
+async function printHTML(html, title) {
   const area = document.getElementById('print-area');
   area.innerHTML = html;
 
@@ -2228,8 +2188,12 @@ async function stageAndPrint(html) {
   await settled(area);
 
   if (!area.firstElementChild) { toast('There was nothing to print.', 'error'); return; }
-  toast('Allow pop-ups for this site and the sheet will open in its own tab instead.', 'info');
+
+  /* Save as PDF names the file after the document, so lend it the sheet's own name. */
+  const was = document.title;
+  if (title) document.title = title;
   window.print();
+  document.title = was;
 }
 
 /* Covers and fonts, with a ceiling so a slow network can't stall the print. */
