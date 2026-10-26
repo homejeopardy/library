@@ -730,6 +730,17 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 
 .print-area { display: none; }
 
+/* Who may do what, in Settings. */
+.person { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 0 0 10px; }
+.person-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.person-head .row-actions { margin-left: auto; }
+.person-can { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 2px 18px; margin-top: 10px; }
+.tick { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: start; padding: 6px 0; }
+.tick input { margin: 2px 0 0; }
+.tick > span { grid-column: 2; }
+.tick-hint { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.tick-stuck { opacity: .7; }
+
 @page { size: letter; margin: 0.5in; }
 
 @media print {

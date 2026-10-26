@@ -638,6 +638,13 @@ function openStaffGate(state) {
       try {
         localStorage.setItem('classroom-library-me', g.account.name);
         localStorage.setItem('classroom-library-me-temp', '1');
+        /* Carry the person's permissions over, or the staff page would open with the
+           run of the place for anyone who can reach the station. */
+        if (Array.isArray(g.account.can)) {
+          localStorage.setItem('classroom-library-can', JSON.stringify(g.account.can));
+        } else {
+          localStorage.removeItem('classroom-library-can');
+        }
       } catch (err) { /* private mode */ }
       location.href = '../';
     } catch (err) {

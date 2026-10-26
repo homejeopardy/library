@@ -466,6 +466,40 @@ encrypted with that person's password (AES-GCM, with the password stretched by P
 **password strength is what protects the library** — eight characters is the floor, and a
 few unrelated words beat a short clever one.
 
+### What each person may do
+
+Under every name is a tick list. The first account made — yours — gets everything.
+Everyone after starts with the everyday work and is ticked up from there:
+
+| Tick | Covers |
+| --- | --- |
+| Check books in and out | Loans, returns, renewals, holds, adding a student |
+| Add and edit books | New books, their details, condition, the attention list |
+| File books on shelves | Shelf-reading, and filing a scanned book to its shelf |
+| Print labels and lists | Spine labels, shelf cards, lists, overdue notices |
+| Delete books and students | Removing a record for good |
+| Change settings, genres and shelves | Loan length, the genre list, shelf layout |
+| Manage people and the key | Accounts, passwords, the GitHub connection |
+| Rewind and export | Earlier versions, restoring, downloading the data |
+
+Ticking saves at once; there is no Save button. A person's buttons disappear along with
+the permission, the Settings tab hides itself if they have none of the last three, and
+the action is refused even if the button is reached another way. Someone can always
+*look* at the whole library — the ticks govern changing it.
+
+The last person who can manage people cannot have that tick taken away, or nobody could
+ever reach the account list again.
+
+**This is a guardrail, not a lock.** Every account unlocks the same access key, so a
+person who knows their way around a browser could still reach the data underneath. What
+it prevents is a helper deleting half the catalogue by accident. Making it a real lock
+would mean a second, read-only GitHub key held by the limited accounts; the code is
+arranged so that can be added later without rework.
+
+An account made before any of this existed has no tick list and keeps the run of the
+place, so an update can never lock you out of your own library. Ticking any box starts
+its list.
+
 ## Changing many books at once
 
 Tick books in the catalog — or the box in the header to take everything the filters are

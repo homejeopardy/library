@@ -258,6 +258,8 @@ function shelvingSessionHTML(shelf) {
 function shelveScan(code) {
   const shelf = shelfById(shelving.shelfId);
   if (!shelf) return;
+  /* Scanning files the book, so it needs the same permission as any other filing. */
+  if (!Auth.can('shelve')) { toast(Auth.refusal('shelf-read'), 'error'); return; }
 
   // A second shelf card means "I have moved on to the next shelf".
   const asShelf = findShelfByScan(code);
@@ -378,6 +380,16 @@ function printShelfCards(shelves) {
   printHTML(`<div class="shelf-sheet">${shelves.map(shelfCardHTML).join('')}</div>`,
     shelves.length === 1 ? 'Shelf card ' + shelves[0].code : 'Shelf cards');
 }
+
+/* Laying shelves out is setup; filing books onto them is everyday work. */
+Object.assign(NEEDS, {
+  'shelf-new': 'setup', 'shelf-edit': 'setup', 'shelf-delete': 'setup',
+  'shelf-move': 'setup', 'shelf-split': 'setup',
+  'shelf-read': 'shelve', 'shelf-finish': 'shelve',
+  'shelf-add-book': 'catalog',
+  'shelf-print': 'print', 'shelf-print-one': 'print',
+  'shelf-print-list': 'print', 'shelf-print-stale': 'print'
+});
 
 Object.assign(ACTIONS, {
   'shelf-new': () => openShelfModal(null),

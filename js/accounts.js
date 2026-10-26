@@ -103,15 +103,28 @@ const Accounts = (function () {
     }
   }
 
-  /* Creates the account, or re-locks it (new password, or a replaced access key). */
-  async function save(name, password, token) {
+  /* Creates the account, or re-locks it (new password, or a replaced access key).
+     What the person may do rides alongside in plain sight: the file is public, so it
+     says only that someone named Sam may print labels — never anything secret. An
+     account re-locked without a list keeps the one it had. */
+  async function save(name, password, token, can) {
     if (String(password).length < MIN_PASSWORD) throw fail('password', 'Pick a password with at least ' + MIN_PASSWORD + ' characters.');
     const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
     const key = await keyFor(password, salt, ITERATIONS);
     const box = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, enc.encode(JSON.stringify({ token: token })));
+    const was = await find(name);
     const account = { user: norm(name), name: String(name).trim(), salt: b64(salt), iv: b64(iv), box: b64(box), iter: ITERATIONS, at: new Date().toISOString() };
-    await change(list => list.filter(a => a.user !== account.user).concat(account));
+    const list = can || (was && was.can);
+    if (list) account.can = list.slice();
+    await change(all => all.filter(a => a.user !== account.user).concat(account));
     return account;
+  }
+
+  /* Changes only the ticks, leaving the locked key alone — no password needed. */
+  async function setAbilities(user, can) {
+    const who = norm(user);
+    return change(list => list.map(a =>
+      a.user === who ? Object.assign({}, a, { can: can.slice() }) : a));
   }
 
   function remove(users) {
@@ -119,5 +132,6 @@ const Accounts = (function () {
     return change(list => list.filter(a => !gone.includes(a.user)));
   }
 
-  return { load: load, find: find, unlock: unlock, save: save, remove: remove, norm: norm, repo: repo, MIN_PASSWORD: MIN_PASSWORD };
+  return { load: load, find: find, unlock: unlock, save: save, setAbilities: setAbilities,
+    remove: remove, norm: norm, repo: repo, MIN_PASSWORD: MIN_PASSWORD };
 })();

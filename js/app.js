@@ -37,12 +37,98 @@ document.getElementById('tabs').addEventListener('click', e => {
   if (btn) go(btn.dataset.route);
 });
 
+/* ------------------------- WHO MAY DO WHAT -------------------------
+   Everyone signed in can look at the whole library. These are the things that
+   change it, ticked per person in Settings.
+
+   This is a guardrail, not a lock. Every account unlocks the same access key, so
+   someone who knows their way around a browser could still reach the data; what it
+   prevents is the student helper deleting half the catalogue by accident.
+   -------------------------------------------------------------------- */
+const ABILITIES = [
+  { key: 'circulate', label: 'Check books in and out',
+    hint: 'The desk: loans, returns, renewals, holds, and adding a new student.' },
+  { key: 'catalog', label: 'Add and edit books',
+    hint: 'New books, their details, condition, and the attention list.' },
+  { key: 'shelve', label: 'File books on shelves',
+    hint: 'Shelf-reading, and filing a scanned book to the shelf it is on.' },
+  { key: 'print', label: 'Print labels and lists',
+    hint: 'Spine labels, shelf cards, shelf lists and overdue notices.' },
+  { key: 'remove', label: 'Delete books and students',
+    hint: 'Removing a record for good. Marking a book lost or damaged does not need this.' },
+  { key: 'setup', label: 'Change settings, genres and shelves',
+    hint: 'Loan length and limits, the genre list, and how the shelves are laid out.' },
+  { key: 'accounts', label: 'Manage people and the key',
+    hint: 'Adding people, resetting passwords, and the connection to GitHub.' },
+  { key: 'history', label: 'Rewind and export',
+    hint: 'Earlier versions, putting the library back, and downloading the data.' }
+];
+
+/* What a new person starts with: the everyday desk and shelf work, nothing that
+   reshapes the library. */
+const EVERYDAY = ['circulate', 'catalog', 'shelve', 'print'];
+
+/* Which ability each action needs. Anything missing here is open to everyone —
+   filters, opening a record to read it, moving between shelves and tabs. */
+const NEEDS = {
+  'checkin': 'circulate', 'do-checkout': 'circulate', 'clear-desk': 'circulate',
+  'renew': 'circulate', 'hold-for': 'circulate', 'cancel-hold': 'circulate',
+  'fill-hold': 'circulate', 'returns-box': 'circulate', 'new-patron': 'circulate',
+  'undo': 'circulate',
+
+  'new-item': 'catalog', 'edit-item': 'catalog', 'pick-genre': 'catalog',
+  'pick-shelf': 'catalog', 'pick-condition': 'catalog', 'mark-trouble': 'catalog',
+  'attention-set': 'catalog', 'attention-clear': 'catalog', 'unmark': 'catalog',
+  'request-done': 'catalog',
+
+  'print-labels': 'print', 'print-notices': 'print', 'print-shelflist': 'print',
+  'pick-labels': 'print', 'unmark-labelled': 'print',
+
+  'del-item': 'remove',
+
+  'save-settings': 'setup', 'genre-add': 'setup', 'genre-rename': 'setup',
+  'genre-delete': 'setup', 'genre-defaults': 'setup', 'reset-all': 'setup',
+  'import-json': 'setup', 'load-sample': 'setup',
+
+  'account-reset': 'accounts', 'account-can': 'accounts',
+  'sync-connect': 'accounts', 'sync-disconnect': 'accounts',
+  'pair-show': 'accounts', 'pair-copy': 'accounts', 'pair-qr': 'accounts', 'pair-file': 'accounts',
+
+  'history-open': 'history', 'export-catalog-csv': 'history',
+  'export-json': 'history', 'export-loans-csv': 'history'
+};
+
+/* Tabs that are no use at all without one of these. */
+const TAB_NEEDS = { settings: ['setup', 'accounts', 'history'] };
+const tabAllowed = r => !TAB_NEEDS[r] || TAB_NEEDS[r].some(Auth.can);
+
+/* Buttons for things this person may not do come off the page rather than sitting
+   there to be pressed and refused. The dispatcher still refuses them, in case one
+   is reached some other way. */
+function hideForbidden(root) {
+  if (!root) return;
+  Array.from(root.querySelectorAll('[data-act]')).forEach(el => {
+    if (!Auth.allowed(el.dataset.act)) el.remove();
+  });
+}
+
+/* Ticking a permission saves straight away; there is no Save button to forget. */
+view.addEventListener('change', e => {
+  const box = e.target.closest('[data-can]');
+  if (!box) return;
+  if (!Auth.can('accounts')) { box.checked = !box.checked; toast(Auth.refusal('account-can'), 'error'); return; }
+  abilityToggled(box);
+});
+
 /* Delegated actions: every button carries data-act and optional data-id. */
 view.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const handler = ACTIONS[el.dataset.act];
-  if (handler) { e.preventDefault(); handler(el.dataset.id, el); }
+  if (!handler) return;
+  e.preventDefault();
+  if (!Auth.allowed(el.dataset.act)) { toast(Auth.refusal(el.dataset.act), 'error'); return; }
+  handler(el.dataset.id, el);
 });
 
 document.addEventListener('keydown', e => {
@@ -67,9 +153,12 @@ function render() {
   if (gated) { renderSignIn(); return; }
   document.title = (S().libraryName || 'Classroom Library');
   Array.from(document.querySelectorAll('.tab')).forEach(t => {
+    t.hidden = !tabAllowed(t.dataset.route);
     t.classList.toggle('active', t.dataset.route === route);
     t.setAttribute('aria-selected', String(t.dataset.route === route));
   });
+  /* A hash typed in by hand shouldn't open a tab this person can't have. */
+  if (!tabAllowed(route)) { route = 'circulation'; }
   const ready = readyHolds().length;
   const pill = document.getElementById('holds-pill');
   pill.hidden = ready === 0;
@@ -78,6 +167,7 @@ function render() {
   const build = VIEWS[route];
   if (!build) { view.innerHTML = ''; return; }   // registered by a script that loads after this one
   view.innerHTML = build();
+  hideForbidden(view);
   if (AFTER[route]) AFTER[route]();
 }
 
@@ -275,6 +365,7 @@ function describeBookChange(was, now) {
 const Auth = (function () {
   const ME = 'classroom-library-me';
   const SEEN = 'classroom-library-has-accounts';
+  const CAN = 'classroom-library-can';
   const get = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const set = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
 
@@ -297,13 +388,34 @@ const Auth = (function () {
     window.addEventListener('pagehide', () => { set(ME, null); set(TEMP, null); });
   }
 
+  /* No list stored means no account is in play: a computer connected with the access
+     key, or an account made before any of this existed. Those keep everything, so an
+     upgrade can never lock the teacher out of her own library. */
+  function abilities() {
+    const raw = get(CAN);
+    if (raw == null) return null;
+    try { const list = JSON.parse(raw); return Array.isArray(list) ? list : null; }
+    catch (e) { return null; }
+  }
+  const can = key => { const list = abilities(); return !list || list.indexOf(key) !== -1; };
+
   return {
     temporary: temporary,
     me: () => get(ME),
-    signIn: name => { set(ME, name); render(); },
+    can: can,
+    abilities: abilities,
+    allowed: act => { const need = NEEDS[act]; return !need || can(need); },
+    refusal: act => {
+      const need = NEEDS[act];
+      const ability = ABILITIES.find(a => a.key === need);
+      return ability
+        ? 'You are not set up to ' + ability.label.charAt(0).toLowerCase() + ability.label.slice(1) + '.'
+        : 'You are not set up to do that.';
+    },
+    signIn: (name, list) => { set(ME, name); set(CAN, list ? JSON.stringify(list) : null); render(); },
     signOut: () => {
       const wasTemporary = temporary();
-      set(ME, null); set(TEMP, null);
+      set(ME, null); set(TEMP, null); set(CAN, null);
       if (wasTemporary) { location.href = 'student/'; return; }
       render();
     },
@@ -395,14 +507,18 @@ async function gateSubmit(form) {
       if (res.next === 'ask') Sync.adopt(res.summary, 'merge');
       await Sync.syncNow();
       requestPersistence();
-      return Auth.signIn(gate.account.name);
+      return Auth.signIn(gate.account.name, gate.account.can);
     }
 
     if (gate.step === 'create') {
       if (form.password.value !== form.again.value) return fail("Those two passwords don't match.");
-      await Accounts.save(gate.name, form.password.value, Sync.key());
+      /* The first account is the teacher's own, so it gets everything. After that a
+         new person starts with the everyday work and is ticked up from Settings. */
+      const first = !(await Accounts.load()).accounts.length;
+      const can = first ? ABILITIES.map(a => a.key) : EVERYDAY.slice();
+      await Accounts.save(gate.name, form.password.value, Sync.key(), can);
       Auth.noteAccounts([1]);
-      return Auth.signIn(gate.name);
+      return Auth.signIn(gate.name, can);
     }
 
     if (gate.step === 'key') {
@@ -518,16 +634,74 @@ async function drawAccounts() {
     const list = (await Accounts.load()).accounts;
     Auth.noteAccounts(list);
     box.innerHTML = list.length
-      ? `<ul class="genre-admin">${list.map(a => `<li>
-          <span>${esc(a.name)}${Accounts.norm(a.user) === Accounts.norm(Auth.me() || '') ? ' <span class="muted small">(you)</span>' : ''}</span>
-          <span class="muted small">since ${esc(fmtDate(a.at))}</span>
-          <span class="row-actions"><button class="link danger" data-act="account-reset" data-id="${esc(a.user)}">Reset password</button></span>
-        </li>`).join('')}</ul>`
+      ? list.map(a => personHTML(a, list)).join('')
       : `<p class="muted">No accounts yet. ${Sync.configured()
           ? 'Sign out and sign in with your name to make the first one.'
           : 'Connect this computer first.'}</p>`;
   } catch (e) {
     box.innerHTML = `<p class="muted">Could not load the list: ${esc(e.message)}</p>`;
+  }
+}
+
+/* One person, with a tick against everything they are allowed to do. An account with
+   no list at all predates permissions and still has the run of the place; say so
+   plainly rather than showing eight empty boxes. */
+function personHTML(account, list) {
+  const me = Accounts.norm(account.user) === Accounts.norm(Auth.me() || '');
+  const can = Array.isArray(account.can) ? account.can : null;
+  /* An account with no list predates permissions and counts as having everything. */
+  const holds = a => !Array.isArray(a.can) || a.can.indexOf('accounts') !== -1;
+  const onlyOneLeft = list.filter(holds).length <= 1;
+  const mayEdit = Auth.can('accounts');
+  return `<section class="person">
+    <div class="person-head">
+      <strong>${esc(account.name)}</strong>${me ? ' <span class="muted small">(you)</span>' : ''}
+      <span class="muted small">since ${esc(fmtDate(account.at))}</span>
+      <span class="row-actions">
+        <button class="link danger" data-act="account-reset" data-id="${esc(account.user)}">Reset password</button>
+      </span>
+    </div>
+    ${can === null
+      ? `<p class="hint">Set up before there were permissions, so this account can do everything.
+           Tick the boxes to limit it.</p>` : ''}
+    <div class="person-can">
+      ${ABILITIES.map(ability => {
+        const on = can === null || can.indexOf(ability.key) !== -1;
+        /* Don't let the last person who can manage people tick that away and lock
+           everyone out of the account list for good. */
+        const stuck = ability.key === 'accounts' && on && onlyOneLeft;
+        return `<label class="tick${stuck ? ' tick-stuck' : ''}" title="${esc(ability.hint)}">
+          <input type="checkbox" data-can="${esc(account.user)}" data-ability="${ability.key}"
+            ${on ? 'checked' : ''} ${stuck || !mayEdit ? 'disabled' : ''}>
+          <span>${esc(ability.label)}</span>
+          <span class="tick-hint">${esc(ability.hint)}${stuck
+            ? ' Someone has to keep this, or no one could ever manage people again.' : ''}</span>
+        </label>`;
+      }).join('')}
+    </div>
+  </section>`;
+}
+
+/* Saved the moment a box is ticked: there is no Save button to forget. */
+async function abilityToggled(input) {
+  const user = input.dataset.ability && input.dataset.can;
+  const box = input.closest('.person-can');
+  const wanted = Array.from(box.querySelectorAll('[data-can]'))
+    .filter(i => i.checked).map(i => i.dataset.ability);
+  Array.from(box.querySelectorAll('[data-can]')).forEach(i => { i.disabled = true; });
+  try {
+    await Accounts.setAbilities(user, wanted);
+    /* Changing your own ticks takes effect at once, so the page has to redraw. */
+    if (Accounts.norm(user) === Accounts.norm(Auth.me() || '')) {
+      Auth.signIn(Auth.me(), wanted);
+      toast('Your own permissions changed.', 'ok');
+      return;
+    }
+    toast('Saved.', 'ok');
+    drawAccounts();
+  } catch (e) {
+    toast(e.message, 'error');
+    drawAccounts();
   }
 }
 
@@ -924,6 +1098,7 @@ function openModal(title, bodyHTML, onMount) {
   document.getElementById('modal-title').textContent = title;
   const body = document.getElementById('modal-body');
   body.innerHTML = bodyHTML;
+  hideForbidden(body);
   if (!modal.open) modal.showModal();
   if (onMount) onMount(body);
 }
@@ -1733,7 +1908,7 @@ VIEWS.settings = function () {
   const s = S();
   return `
   <section class="pane narrow">
-    <h2 class="section-title">Library</h2>
+    ${Auth.can('setup') ? `<h2 class="section-title">Library</h2>
     <div class="grid-2">
       ${field('Library name', 'libraryName', s.libraryName)}
       ${field('Barcode prefix', 'barcodePrefix', s.barcodePrefix)}
@@ -1749,23 +1924,23 @@ VIEWS.settings = function () {
     </label>
     <div class="actions"><button class="btn btn-primary" data-act="save-settings">Save settings</button></div>
 
-    <h2 class="section-title">Sync across devices</h2>
+    ` : ''}${Auth.can('accounts') ? `<h2 class="section-title">Sync across devices</h2>
     ${syncSettingsHTML()}
 
-    <h2 class="section-title">Who can sign in</h2>
+    ` : ''}${Auth.can('accounts') ? `<h2 class="section-title">Who can sign in</h2>
     <p class="hint">Each person unlocks the library with their own password, on any computer, without the access key.
       A new person signs in here on this computer and picks a password the first time.
       Accounts live in <code>${esc(Accounts.repo())}</code>; the password is never stored anywhere.</p>
     <div id="accounts-list" class="muted">Loading…</div>
 
-    <h2 class="section-title">Earlier versions</h2>
+    ` : ''}${Auth.can('history') ? `<h2 class="section-title">Earlier versions</h2>
     ${Sync.configured()
       ? `<p class="hint">Every save is kept. Open one to see what is different from now, and put back
            the whole library or a single book. Nothing is lost by looking.</p>
          <div class="actions"><button class="btn" data-act="history-open">Show earlier versions</button></div>`
       : '<p class="hint">Turn on sync above and every save becomes a version you can go back to.</p>'}
 
-    <h2 class="section-title">Genres</h2>
+    ` : ''}${Auth.can('setup') ? `<h2 class="section-title">Genres</h2>
     <p class="hint">These are the choices in the Genre menu when you add a book. Renaming a genre updates every book in it; renaming one onto another merges them.</p>
     <ul class="genre-admin">
       ${genreList().map(g => {
@@ -1786,7 +1961,7 @@ VIEWS.settings = function () {
     </div>
     <div class="actions"><button class="btn btn-quiet" data-act="genre-defaults">Restore default genres</button></div>
 
-    <h2 class="section-title">Backup</h2>
+    ` : ''}${Auth.can('history') ? `<h2 class="section-title">Backup</h2>
     <p class="hint">${Sync.configured()
       ? 'The books themselves are safe: they live in GitHub as well as here, with every earlier version kept. Clearing this browser\'s cookies and site data empties its copy and forgets the key — opening your saved setup link or recovery file brings both straight back. (Clearing only the <em>cache</em> changes nothing.)'
       : 'Everything lives in this browser on this computer, and clearing cookies and site data erases it for good. Turn on sync above, or export a backup regularly — and always before clearing browsing data or switching machines.'}</p>
@@ -1797,12 +1972,13 @@ VIEWS.settings = function () {
       <input type="file" id="import-file" accept="application/json,.json" hidden>
     </div>
 
-    <h2 class="section-title">Danger zone</h2>
+    ` : ''}${Auth.can('setup') ? `<h2 class="section-title">Danger zone</h2>
     <div class="actions">
       <button class="btn" data-act="load-sample" ${DB.items.length || Sync.configured() ? 'disabled title="Only available on an empty library that is not syncing"' : ''}>Load sample data</button>
       <button class="btn btn-danger" data-act="reset-all">Erase everything</button>
     </div>
     <p class="hint">Storage in use: ${esc(storageSize())}</p>
+    ` : ''}
   </section>`;
 };
 
@@ -1813,10 +1989,14 @@ AFTER.settings = function () {
     e.preventDefault();
     connectWithKey(form.querySelector('#sync-key').value, form.querySelector('button[type="submit"]'));
   }));
-  document.getElementById('new-genre').addEventListener('keydown', e => {
+  /* Sections this person may not have are not on the page at all, so everything
+     below is wired only if its own piece is there. */
+  const newGenre = document.getElementById('new-genre');
+  if (newGenre) newGenre.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); ACTIONS['genre-add'](); }
   });
   const file = document.getElementById('import-file');
+  if (!file) return;
   file.addEventListener('change', () => {
     const f = file.files[0];
     if (!f) return;
