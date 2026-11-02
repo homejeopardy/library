@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Classroom Library</title>
 <!-- Bump ?v= on every release so browsers and GitHub Pages never mix old and new files. -->
-<link rel="stylesheet" href="styles.css?v=57">
-<link rel="icon" href="icons/favicon.svg?v=57" type="image/svg+xml">
-<link rel="alternate icon" href="icons/favicon-32.png?v=57" sizes="32x32">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=57">
-<link rel="manifest" href="manifest.webmanifest?v=57">
+<link rel="stylesheet" href="styles.css?v=58">
+<link rel="icon" href="icons/favicon.svg?v=58" type="image/svg+xml">
+<link rel="alternate icon" href="icons/favicon-32.png?v=58" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=58">
+<link rel="manifest" href="manifest.webmanifest?v=58">
 <meta name="theme-color" content="#1f5f4f">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Library">
@@ -18,12 +18,14 @@
 <body>
 
 <header class="topbar">
-  <div class="brand">
-    <img class="brand-mark" src="icons/favicon.svg?v=57" alt="" width="22" height="22">
-    <span id="brand-name">Classroom Library</span>
+  <div class="topbar-main">
+    <div class="brand">
+      <img class="brand-mark" src="icons/favicon.svg?v=58" alt="" width="22" height="22">
+      <span id="brand-name">Classroom Library</span>
+    </div>
+    <button type="button" id="sync-pill" class="sync-pill" hidden></button>
+    <button type="button" id="who" class="who" hidden></button>
   </div>
-  <button type="button" id="sync-pill" class="sync-pill" hidden></button>
-  <button type="button" id="who" class="who" hidden></button>
   <nav class="tabs" id="tabs" role="tablist">
     <button class="tab" data-route="circulation" role="tab">Circulation</button>
     <button class="tab" data-route="catalog"     role="tab">Catalog</button>
@@ -50,18 +52,18 @@
 <div id="toasts" class="toasts" aria-live="polite"></div>
 <div id="print-area" class="print-area"></div>
 
-<script src="js/config.js?v=57"></script>
-<script src="js/util.js?v=57"></script>
-<script src="js/store.js?v=57"></script>
-<script src="js/genre-art.js?v=57"></script>
-<script src="js/barcode.js?v=57"></script>
-<script src="js/decode1d.js?v=57"></script>
-<script src="js/lookup.js?v=57"></script>
-<script src="js/sync.js?v=57"></script>
-<script src="js/accounts.js?v=57"></script>
-<script src="js/scan.js?v=57"></script>
-<script src="js/pwa.js?v=57"></script>
-<script src="js/app.js?v=57"></script>
-<script src="js/shelving.js?v=57"></script>
+<script src="js/config.js?v=58"></script>
+<script src="js/util.js?v=58"></script>
+<script src="js/store.js?v=58"></script>
+<script src="js/genre-art.js?v=58"></script>
+<script src="js/barcode.js?v=58"></script>
+<script src="js/decode1d.js?v=58"></script>
+<script src="js/lookup.js?v=58"></script>
+<script src="js/sync.js?v=58"></script>
+<script src="js/accounts.js?v=58"></script>
+<script src="js/scan.js?v=58"></script>
+<script src="js/pwa.js?v=58"></script>
+<script src="js/app.js?v=58"></script>
+<script src="js/shelving.js?v=58"></script>
 </body>
 </html>

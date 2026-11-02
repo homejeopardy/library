@@ -54,14 +54,18 @@ VIEWS.shelves = function () {
 function shelfListHTML() {
   const shelves = shelvesList();
   const unshelved = DB.items.filter(i => !i.shelfId).length;
+  const sub = shelves.length
+    ? plural(shelves.length, 'shelf', 'shelves') + ' &middot; ' + plural(unshelved, 'book') + ' not on a shelf yet'
+    : 'No shelves yet';
   return `
   <section class="pane">
+    ${pageHead('Shelves', sub,
+      (shelves.length ? '<button class="btn" data-act="shelf-print">Print shelf cards</button>' : '') +
+      '<button class="btn btn-primary" data-act="shelf-new">Add a shelf</button>')}
     <div class="scan-wrap">
       <label class="scan-label" for="scan">Scan a shelf card to start filing — or pick one below</label>
       <input id="scan" class="scan" autocomplete="off" spellcheck="false" placeholder="Scan the shelf card">
-      <p class="hint">${shelves.length
-        ? plural(shelves.length, 'shelf', 'shelves') + ' &middot; ' + plural(unshelved, 'book') + ' not on a shelf yet'
-        : 'No shelves yet. Add one below, print its card, and stick it on the shelf.'}</p>
+      ${shelves.length ? '' : '<p class="hint">Add one above, print its card, and stick it on the shelf.</p>'}
       ${shelves.length ? camButtonHTML('scan-shelf-card', 'Scan a shelf card') : ''}
     </div>
 
@@ -90,12 +94,10 @@ function shelfListHTML() {
       </tr>`).join('')}</tbody>
     </table>` : ''}
 
-    <div class="actions">
-      <button class="btn btn-primary" data-act="shelf-new">Add a shelf</button>
-      ${shelves.length ? '<button class="btn" data-act="shelf-print">Print shelf cards</button>' : ''}
+    ${shelves.filter(shelfCardStale).length || unshelvedItems().length ? `<div class="actions">
       ${shelves.filter(shelfCardStale).length ? '<button class="btn" data-act="shelf-print-stale">Print only the out-of-date cards</button>' : ''}
       ${unshelvedItems().length ? `<button class="btn btn-quiet" data-act="shelf-unshelved">${plural(unshelvedItems().length, 'book')} with no shelf</button>` : ''}
-    </div>
+    </div>` : ''}
   </section>`;
 }
 

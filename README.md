@@ -432,7 +432,7 @@ ones you haven't reached.
 
 ## The returns box
 
-**Circulation → Returns box.** For the pile that builds up overnight. Scan them one after
+**Circulation → Empty the returns box.** For the pile that builds up overnight. Scan them one after
 another without clearing between each; every book lands in one list with a running tally,
 and anything that needs you — a hold, a book marked lost, a book that wasn't out — is
 flagged in place rather than interrupting the next scan.

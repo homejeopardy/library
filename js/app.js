@@ -5,6 +5,16 @@
    without ever touching the mouse.
    --------------------------------------------------------------- */
 
+/* The resting desk's drawing: a barcode between two brackets. A picture of
+   the thing the screen is waiting for says more than an emoji does, and it
+   takes the page's own colour instead of the system's. */
+const BARCODE_GLYPH =
+  '<svg viewBox="0 0 48 32" width="58" height="39" fill="none" stroke="currentColor" ' +
+  'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M6 7V4.5A1.5 1.5 0 0 1 7.5 3H12M42 7V4.5A1.5 1.5 0 0 0 40.5 3H36' +
+  'M6 25v2.5A1.5 1.5 0 0 0 7.5 29H12M42 25v2.5a1.5 1.5 0 0 1-1.5 1.5H36"/>' +
+  '<path d="M14 10v12M19 10v12M24.5 10v12M30 10v12M35 10v12"/></svg>';
+
 /* Filled in below: one entry per tab. */
 const VIEWS = {};   // route -> HTML string
 const AFTER = {};   // route -> post-render wiring
@@ -471,11 +481,17 @@ function renderSignIn() {
       </div>`
   }[g.step];
 
+  /* The mark is read off the one already in the top bar, so the release
+     number stays written in the HTML and nowhere else. */
+  const mark = document.querySelector('.brand-mark');
   view.innerHTML = `<section class="pane narrow sign-in">
-    <h2>${esc(S().libraryName || 'Classroom Library')}</h2>
-    <form id="gate-form" autocomplete="on">${body}
-      ${g.error ? `<p class="danger">${esc(g.error)}</p>` : ''}
-    </form>
+    <div class="sign-in-card">
+      ${mark ? `<img class="sign-in-mark" src="${esc(mark.getAttribute('src'))}" alt="" width="34" height="34">` : ''}
+      <h2>${esc(S().libraryName || 'Classroom Library')}</h2>
+      <form id="gate-form" autocomplete="on">${body}
+        ${g.error ? `<p class="danger">${esc(g.error)}</p>` : ''}
+      </form>
+    </div>
   </section>`;
 
   const form = document.getElementById('gate-form');
@@ -742,30 +758,57 @@ function resetCirc() {
 VIEWS.circulation = function () {
   const out = activeLoans().length;
   const over = overdueLoans().length;
+  const sub = DB.items.length
+    ? plural(DB.items.length, 'book') + ' &middot; ' + out + ' out' +
+      (over ? ' &middot; <span class="danger">' + over + ' overdue</span>' : '')
+    : 'Nothing in the collection yet';
   return `
   <section class="pane">
-    <div class="scan-wrap">
-      <label class="scan-label" for="scan">Scan a barcode &mdash; or type an ISBN, title, or student name</label>
-      <input id="scan" class="scan" autocomplete="off" spellcheck="false"
-             placeholder="Scan or type, then press Enter" aria-describedby="scan-hint">
-      <p class="hint">
-        <button class="link" data-act="returns-box">${circ.returnsBox ? 'Leave the returns box' : 'Emptying the returns box?'}</button>
-      </p>
-      ${camButtonHTML('scan-desk', 'Scan with the camera')}
-      <p id="scan-hint" class="hint">
-        ${DB.items.length ? plural(DB.items.length, 'book') + ' in the collection &middot; ' + out + ' out' + (over ? ' &middot; <strong class="danger">' + over + ' overdue</strong>' : '') : 'No books yet — scan an ISBN or <a href="#" data-act="new-item">add one by hand</a>.'}
-      </p>
+    ${pageHead('Circulation', sub,
+      `<button class="btn ${circ.returnsBox ? 'btn-primary' : ''}" data-act="returns-box">${circ.returnsBox ? 'Leave the returns box' : 'Empty the returns box'}</button>`)}
+    <div class="desk">
+      <div class="desk-main">
+        <div class="scan-wrap">
+          <label class="scan-label" for="scan">Scan a barcode &mdash; or type an ISBN, title, or student name</label>
+          <input id="scan" class="scan" autocomplete="off" spellcheck="false"
+                 placeholder="Scan or type, then press Enter">
+          ${camButtonHTML('scan-desk', 'Scan with the camera')}
+          ${DB.items.length ? '' : `<p class="hint">No books yet — scan an ISBN or <a href="#" data-act="new-item">add one by hand</a>.</p>`}
+        </div>
+        <div id="circ-panel" class="circ-panel">${circPanelHTML()}</div>
+      </div>
+      <aside class="desk-side">
+        ${deskGlanceHTML()}
+        ${recentActivityHTML()}
+      </aside>
     </div>
-    <div id="circ-panel" class="circ-panel">${circPanelHTML()}</div>
-    ${recentActivityHTML()}
   </section>`;
 };
+
+/* The four figures a desk is actually asked about during a lesson, down the
+   side where they can be read without leaving the book being scanned. */
+function deskGlanceHTML() {
+  const over = overdueLoans().length;
+  const ready = readyHolds().length;
+  const rows = [
+    ['Books', DB.items.length, ''],
+    ['Checked out', activeLoans().length, ''],
+    ['Overdue', over, over ? 'danger' : ''],
+    ['Holds ready', ready, '']
+  ];
+  return `<section>
+    <h2 class="section-title">At the desk</h2>
+    <dl class="glance">
+      ${rows.map(r => `<div><dt>${r[0]}</dt><dd class="${r[2]}">${r[1]}</dd></div>`).join('')}
+    </dl>
+  </section>`;
+}
 
 function circPanelHTML() {
   if (circ.returnsBox) return returnsBoxHTML();
   if (circ.matches) return matchesHTML();
   if (!circ.item) return `<div class="empty-desk">
-      <p class="empty-desk-icon" aria-hidden="true">📖</p>
+      <p class="empty-desk-icon" aria-hidden="true">${BARCODE_GLYPH}</p>
       <p>Ready. Scan a book to check it out or in.</p>
     </div>`;
 
@@ -937,10 +980,10 @@ function recentActivityHTML() {
         const verb = a.type === 'checkout' ? 'Checked out' : a.type === 'checkin' ? 'Checked in' : 'Renewed';
         return `<li>
           <span class="recent-verb ${a.type}">${verb}</span>
+          <span class="recent-time">${esc(new Date(a.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}</span>
           <span class="recent-what">${esc(item ? item.title : 'deleted item')}</span>
-          <span class="muted">${a.type === 'checkin' ? 'from' : 'to'} ${esc(p ? p.name : '?')}</span>
-          <span class="muted time">${esc(new Date(a.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}</span>
-          <button class="link" data-act="undo" data-id="${a.id}">Undo</button>
+          <span class="recent-who">${a.type === 'checkin' ? 'from' : 'to'} ${esc(p ? p.name : '?')}</span>
+          <button class="link recent-undo" data-act="undo" data-id="${a.id}">Undo</button>
         </li>`;
       }).join('')}
     </ul>
@@ -1694,8 +1737,17 @@ VIEWS.catalog = function () {
   const used = genreList().filter(g => booksInGenre(g).length);
   const untagged = DB.items.filter(i => !i.genre).length;
 
+  const filtered = items.length !== DB.items.length;
+  const sub = DB.items.length
+    ? plural(DB.items.length, 'book') + ' in the collection' +
+      (filtered ? ' &middot; showing ' + items.length : '')
+    : 'Nothing in the collection yet';
+
   return `
   <section class="pane">
+    ${pageHead('Catalog', sub,
+      camButtonHTML('scan-lookup', 'What is this?') +
+      '<button class="btn btn-primary" data-act="new-item">Add a book</button>')}
     <div class="toolbar">
       <input id="catalog-q" class="search" placeholder="Search title, author, genre, tag or barcode" value="${esc(ui.catalogQuery)}" autocomplete="off">
       ${shelvesList().length ? `<select id="catalog-shelf" class="select" aria-label="Shelf">
@@ -1713,8 +1765,6 @@ VIEWS.catalog = function () {
           `<button class="chip ${ui.catalogFilter === k ? 'active' : ''}" data-act="cat-filter" data-id="${k}">${label}</button>`).join('')}
       </div>
       <span class="spacer"></span>
-      <button class="btn btn-primary" data-act="new-item">Add a book</button>
-      ${camButtonHTML('scan-lookup', 'What is this?')}
       <button class="btn btn-quiet" data-act="print-labels">Print labels</button>
       ${lastLabelled.length ? `<button class="btn btn-quiet" data-act="unmark-labelled">Undo “marked as labelled”</button>` : ''}
       <button class="btn btn-quiet" data-act="print-shelflist">Print list</button>
@@ -1811,6 +1861,19 @@ function ratingLineHTML(item) {
   return `<div class="small muted">${starsHTML(r.avg)} ${r.avg.toFixed(1)} <span class="muted">(${plural(r.count, 'rating')})</span></div>`;
 }
 
+/* Every screen opens the same way: its name, how much of it there is, and the
+   one or two things you came here to do. `sub` and `actions` are HTML, so
+   anything typed by a person has to be escaped before it gets here. */
+function pageHead(title, sub, actions) {
+  return `<header class="page-head">
+    <div>
+      <h1>${esc(title)}</h1>
+      ${sub ? `<p class="page-sub">${sub}</p>` : ''}
+    </div>
+    ${actions ? `<div class="page-actions">${actions}</div>` : ''}
+  </header>`;
+}
+
 function emptyState(message, cta) {
   return `<div class="empty">
     <p>${esc(message)}</p>
@@ -1824,8 +1887,18 @@ VIEWS.patrons = function () {
   let people = searchPatrons(ui.patronQuery, 500);
   if (ui.patronGroup === '__none__') people = people.filter(p => !p.group);
   else if (ui.patronGroup) people = people.filter(p => normName(p.group) === normName(ui.patronGroup));
+  const groups = patronGroups().length;
+  const sub = DB.patrons.length
+    ? plural(DB.patrons.length, 'student') + (groups ? ' &middot; ' + plural(groups, 'class', 'classes') : '') +
+      (people.length !== DB.patrons.length ? ' &middot; showing ' + people.length : '')
+    : 'Nobody yet';
+
   return `
   <section class="pane">
+    ${pageHead('Students', sub,
+      '<button class="btn" data-act="print-cards">Print cards</button>' +
+      '<button class="btn" data-act="add-class">Add a class</button>' +
+      '<button class="btn btn-primary" data-act="new-patron">Add a student</button>')}
     <div class="toolbar">
       <input id="patron-q" class="search" placeholder="Search students" value="${esc(ui.patronQuery)}" autocomplete="off">
       ${patronGroups().length ? `<select id="patron-group" class="select" aria-label="Class">
@@ -1833,10 +1906,6 @@ VIEWS.patrons = function () {
         ${patronGroups().map(g => `<option value="${esc(g)}" ${normName(g) === normName(ui.patronGroup) ? 'selected' : ''}>${esc(g)} (${DB.patrons.filter(p => normName(p.group) === normName(g)).length})</option>`).join('')}
         <option value="__none__" ${ui.patronGroup === '__none__' ? 'selected' : ''}>No class set (${DB.patrons.filter(p => !p.group).length})</option>
       </select>` : ''}
-      <span class="spacer"></span>
-      <button class="btn" data-act="print-cards">Print cards</button>
-      <button class="btn" data-act="add-class">Add a class</button>
-      <button class="btn btn-primary" data-act="new-patron">Add a student</button>
     </div>
     ${people.length ? `
     <table class="table">
@@ -1890,9 +1959,15 @@ VIEWS.holds = function () {
       </td>
     </tr>`;
   };
-  if (!ready.length && !waiting.length) return `<section class="pane">${emptyState('No holds right now. Place one from the catalog or the circulation desk.', '')}</section>`;
+  const sub = ready.length || waiting.length
+    ? (ready.length ? ready.length + ' ready for pickup' : 'None ready yet') +
+      (waiting.length ? ' &middot; ' + plural(waiting.length, 'still waiting', 'still waiting') : '')
+    : 'Nobody is waiting for anything';
+  const head = pageHead('Holds', sub, '');
+  if (!ready.length && !waiting.length) return `<section class="pane">${head}${emptyState('No holds right now. Place one from the catalog or the circulation desk.', '')}</section>`;
   return `
   <section class="pane">
+    ${head}
     ${ready.length ? `<h2 class="section-title">Ready for pickup</h2>
       <table class="table"><tbody>${ready.map(h => row(h, true)).join('')}</tbody></table>` : ''}
     ${waiting.length ? `<h2 class="section-title">Waiting</h2>
@@ -1921,6 +1996,7 @@ VIEWS.reports = function () {
 
   return `
   <section class="pane">
+    ${pageHead('Reports', 'Everything below is as it stands on ' + esc(fmtDateFull(nowISO())), '')}
     <div class="tiles">
       ${tile(DB.items.length, 'books')}
       ${tile(out.length, 'checked out')}
@@ -1933,7 +2009,7 @@ VIEWS.reports = function () {
       ${tile(genreDisagreements().length, 'titles filed two ways', genreDisagreements().length ? 'warn' : '')}
     </div>
     ${genreDisagreements().length ? `<div class="actions">
-      <button class="btn btn-quiet" data-act="genre-disagree">Settle the ${genreDisagreements().length} filed two ways</button>
+      <button class="btn" data-act="genre-disagree">Settle the ${genreDisagreements().length} filed two ways</button>
     </div>` : ''}
 
     <h2 class="section-title">Overdue <button class="btn btn-quiet" data-act="print-notices" ${over.length ? '' : 'disabled'}>Print notices</button></h2>
@@ -2090,6 +2166,7 @@ VIEWS.settings = function () {
   const s = S();
   return `
   <section class="pane narrow">
+    ${pageHead('Settings', 'How this library works, and who may change it', '')}
     ${installSectionHTML()}
     ${Auth.can('setup') ? `<h2 class="section-title">Library</h2>
     <div class="grid-2">
