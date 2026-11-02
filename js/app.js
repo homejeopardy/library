@@ -2694,7 +2694,11 @@ ACTIONS['genre-disagree'] = () => {
         ${groups.map((g, n) => `<li>
           <div>
             <strong>${esc(g.title)}</strong>${g.author ? ` <span class="muted">${esc(g.author)}</span>` : ''}
-            <div class="small muted">${plural(g.copies.length, 'copy', 'copies')} &middot; ${esc(g.copies.map(c => c.barcode).join(', '))}</div>
+            <div class="small muted">${g.copies.map(c =>
+              esc(c.barcode) + (c.isbn ? ' <span class="mono">' + esc(c.isbn) + '</span>' : '')).join(' &middot; ')}</div>
+            <div class="small ${g.sameEdition ? 'danger' : 'muted'}">${g.sameEdition
+              ? 'Same ISBN, so the same book — one of these is simply wrong.'
+              : 'Different ISBNs. Check before settling: one may be a graphic adaptation or a study guide, and then they are both right.'}</div>
           </div>
           <div class="disagree-pick">
             ${g.genres.map(x => mayFix

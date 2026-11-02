@@ -549,6 +549,15 @@ different ISBN and still belongs on the same shelf. Books with no genre at all a
 — that's a different problem, counted elsewhere, and folding it in would bury the real
 disagreements.
 
+Each copy is listed with its ISBN, and the list says which kind of disagreement it is,
+because they need different answers:
+
+- **Same ISBN** means the same book twice and one of them is simply wrong. Settle it.
+- **Different ISBNs** may be two editions that genuinely belong apart — a graphic
+  adaptation, a verse original, a study guide about the novel under the novel's name.
+  *The Crossover* is all three problems at once: a verse novel, a graphic novel of it, and
+  copies of each. Check before settling.
+
 ## Lost and damaged books
 
 From the circulation desk (**Lost or damaged…**), from a book's Edit dialog, or from the

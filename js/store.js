@@ -869,10 +869,18 @@ function genreDisagreements() {
     copies.forEach(i => { genres[i.genre] = (genres[i.genre] || 0) + 1; });
     const names = Object.keys(genres);
     if (names.length < 2) return null;
+    // Whether the copies that disagree are the same edition. Two copies
+    // sharing an ISBN are the same book and one of them is simply wrong. Two
+    // with different ISBNs may both be right — a graphic adaptation, a verse
+    // original, a study guide about the novel — so the ISBNs are carried
+    // through to the screen where the teacher can see which is which.
+    const isbns = copies.map(i => normCode(i.isbn)).filter(Boolean);
+    const sameEdition = isbns.length === copies.length && isbns.every(x => x === isbns[0]);
     return {
       title: copies[0].title,
       author: copies[0].author || '',
       copies: copies,
+      sameEdition: sameEdition,
       // Commonest first: the majority is usually the one that was meant.
       genres: names.sort((a, b) => genres[b] - genres[a] || a.localeCompare(b)).map(g => ({ genre: g, count: genres[g] }))
     };
