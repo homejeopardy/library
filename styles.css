@@ -76,7 +76,7 @@ a { color: var(--accent); }
 }
 
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 650; letter-spacing: -.01em; }
-.brand-mark { font-size: 20px; }
+.brand-mark { width: 22px; height: 22px; border-radius: 5px; display: block; flex: none; }
 
 .tabs { display: flex; gap: 2px; flex-wrap: wrap; }
 
@@ -322,6 +322,9 @@ code { font-family: var(--mono); font-size: .92em; background: var(--surface-2);
   border-radius: 8px;
 }
 .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--accent); }
+/* A pasted class list is read down the column, so it wants a fixed pitch and
+   no resizing sideways out of the dialog. */
+.field textarea { font-family: var(--mono); font-size: 13px; line-height: 1.5; resize: vertical; }
 .patron-input { font-size: 17px !important; }
 
 .suggest {

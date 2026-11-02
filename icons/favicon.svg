@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"
+     role="img" aria-label="Classroom Library">
+  <title>Classroom Library</title>
+  <!-- The same idea cut down for 16 and 32 pixels, where the full icon turns to
+       mush: three fat spines, no shelf, no banding, nothing under 6px wide. -->
+  <rect width="64" height="64" rx="12" fill="#1f5f4f"/>
+  <rect x="14" y="16" width="10" height="34" rx="3" fill="#f4f1e8"/>
+  <rect x="27" y="12" width="10" height="38" rx="3" fill="#d9a441"/>
+  <rect x="40" y="19" width="10" height="31" rx="3" fill="#9ecfbb"/>
+</svg>

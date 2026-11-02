@@ -74,6 +74,7 @@ const NEEDS = {
   'checkin': 'circulate', 'do-checkout': 'circulate', 'clear-desk': 'circulate',
   'renew': 'circulate', 'hold-for': 'circulate', 'cancel-hold': 'circulate',
   'fill-hold': 'circulate', 'returns-box': 'circulate', 'new-patron': 'circulate',
+  'add-class': 'circulate',
   'undo': 'circulate',
 
   'new-item': 'catalog', 'edit-item': 'catalog', 'pick-genre': 'catalog',
@@ -1834,6 +1835,7 @@ VIEWS.patrons = function () {
       </select>` : ''}
       <span class="spacer"></span>
       <button class="btn" data-act="print-cards">Print cards</button>
+      <button class="btn" data-act="add-class">Add a class</button>
       <button class="btn btn-primary" data-act="new-patron">Add a student</button>
     </div>
     ${people.length ? `
@@ -2088,6 +2090,7 @@ VIEWS.settings = function () {
   const s = S();
   return `
   <section class="pane narrow">
+    ${installSectionHTML()}
     ${Auth.can('setup') ? `<h2 class="section-title">Library</h2>
     <div class="grid-2">
       ${field('Library name', 'libraryName', s.libraryName)}
@@ -2673,6 +2676,43 @@ const LABEL_ORDERS = [
 ];
 
 /* ---------------------------------------------------------------
+   Putting the app on a phone's home screen.
+
+   Worth offering rather than leaving to be discovered: scanning is the
+   reason to use a phone here, and a tab among thirty other tabs is not
+   where anyone finds it again. Chrome tells the page when it is willing
+   to install and js/pwa.js keeps that offer; Safari never does, so
+   there the route is spelled out instead of a button that cannot work.
+
+   Nothing is said at all once it is already installed, or on a desktop
+   where it would only be noise. --------------------------------- */
+
+function installSectionHTML() {
+  if (runningInstalled()) return '';
+  const offered = document.documentElement.dataset.installable === 'yes';
+  const touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+  if (!offered && !(touch && onApple())) return '';
+  return `
+    <h2 class="section-title">On this device</h2>
+    ${offered ? `
+      <p>Add the library to the home screen and it opens like any other app — no address
+        bar, its own icon, and it still works when the Wi-Fi does not.</p>
+      <div class="actions"><button class="btn btn-primary" data-act="install-app">Add to home screen</button></div>
+    ` : `
+      <p>To put the library on the home screen: tap
+        <strong>Share</strong> at the bottom of Safari, then <strong>Add to Home Screen</strong>.
+        It then opens like any other app — no address bar, its own icon, and it still works
+        when the Wi-Fi does not.</p>
+    `}`;
+}
+
+ACTIONS['install-app'] = async () => {
+  const yes = await askToInstall();
+  if (yes) toast('Added. Look for it on the home screen.', 'ok');
+  render();
+};
+
+/* ---------------------------------------------------------------
    Copies of one book filed under two different genres.
 
    The fix is one click per title, because the answer is nearly always
@@ -2725,6 +2765,87 @@ ACTIONS['genre-disagree'] = () => {
     });
   }
   draw();
+};
+
+/* ---------------------------------------------------------------
+   A whole class at once.
+
+   Students were added one at a time, or created at the desk the first
+   time they borrowed something. That was fine until cards: a card sheet
+   holds thirty, and nobody types thirty names into a dialog one by one
+   in September. Paste the list instead.
+   --------------------------------------------------------------- */
+
+ACTIONS['add-class'] = () => {
+  const groups = patronGroups();
+
+  function countLine(names, split) {
+    return names.length
+      ? plural(split.fresh.length, 'new student') + (split.known.length
+          ? ' · ' + plural(split.known.length, 'name is', 'names are') + ' already in the library'
+          : '')
+      : 'Nothing pasted yet.';
+  }
+
+  function draw(text, group, surnameFirst) {
+    const names = parseNameList(text, surnameFirst);
+    const seen = previewClass(names);
+    openModal('Add a class', `
+      <label class="field"><span>Paste the names, one on each line</span>
+        <textarea name="names" rows="9" spellcheck="false"
+          placeholder="Amara Okafor&#10;Ben Whitfield&#10;Chloe Nguyen">${esc(text)}</textarea></label>
+      <label class="check">
+        <input type="checkbox" name="surname" ${surnameFirst ? 'checked' : ''}>
+        <span>The surname comes first &mdash; <span class="mono">Okafor, Amara</span></span>
+      </label>
+      <label class="field"><span>Class</span>
+        <input name="group" value="${esc(group)}" list="class-list" autocomplete="off"
+          placeholder="e.g. Period 2"></label>
+      ${groups.length ? `<datalist id="class-list">${groups.map(g => `<option value="${esc(g)}">`).join('')}</datalist>` : ''}
+      <p class="hint" id="class-note">${esc(countLine(names, seen))}</p>
+      ${seen.known.length ? `<p class="note">Already here: ${esc(seen.known.slice(0, 8).join(', '))}${seen.known.length > 8 ? ', and ' + (seen.known.length - 8) + ' more' : ''}.
+        They keep everything they have borrowed${group ? ', and move into ' + esc(group) : ''}.</p>` : ''}
+      ${names.length ? `<h3 class="section-title">As they will be filed</h3>
+        <p class="small muted">${esc(names.slice(0, 12).join(' · '))}${names.length > 12 ? ' · …' : ''}</p>` : ''}
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="do-add" ${names.length ? '' : 'disabled'}>Add ${plural(names.length, 'student')}</button>
+        <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+      </div>
+      <p class="hint">Card numbers are handed out when you print cards, not here.</p>
+    `, body => {
+      const get = n => body.querySelector('[name="' + n + '"]');
+      const area = get('names');
+      const redraw = () => draw(area.value, get('group').value, get('surname').checked);
+      // A full redraw on every keystroke would steal the cursor, so while
+      // someone is still typing only the count and the button move.
+      area.addEventListener('input', () => {
+        const now = parseNameList(area.value, get('surname').checked);
+        body.querySelector('#class-note').textContent = countLine(now, previewClass(now));
+        const go = body.querySelector('#do-add');
+        go.textContent = 'Add ' + plural(now.length, 'student');
+        go.disabled = !now.length;
+      });
+      area.addEventListener('change', redraw);
+      get('surname').addEventListener('change', redraw);
+      get('group').addEventListener('change', redraw);
+      body.querySelector('#do-add').addEventListener('click', () => {
+        const picked = parseNameList(area.value, get('surname').checked);
+        const where = get('group').value.trim();
+        if (!picked.length) return;
+        const res = addClass(picked, where);
+        closeModal();
+        const bits = [];
+        if (res.added.length) bits.push(plural(res.added.length, 'student') + ' added');
+        if (res.moved.length) bits.push(plural(res.moved.length, 'student') + ' moved into ' + where);
+        if (res.already.length) bits.push(plural(res.already.length, 'was', 'were') + ' already there');
+        toast(bits.join(', ') + '.', 'ok');
+        render();
+      });
+      area.focus();
+    });
+  }
+
+  draw('', groups.length === 1 ? groups[0] : '', false);
 };
 
 /* ---------------------------------------------------------------

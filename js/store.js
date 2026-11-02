@@ -262,6 +262,52 @@ function addPatron(name, extra) {
   return { ok: true, patron: p, existed: false };
 }
 
+/* A class, pasted in one go.
+
+   One name per line. A list copied out of a gradebook usually arrives as
+   "Okafor, Amara" and sometimes carries a trailing column, so the comma can be
+   turned round and anything after a tab is dropped. Names already in the
+   library are matched and left alone apart from their class, because a student
+   who borrowed a book last year is the same student. */
+function parseNameList(text, surnameFirst) {
+  const out = [];
+  String(text || '').split(/[\r\n]+/).forEach(line => {
+    let name = line.split('\t')[0].trim().replace(/\s+/g, ' ');
+    if (!name) return;
+    if (surnameFirst && name.indexOf(',') !== -1) {
+      const at = name.indexOf(',');
+      name = (name.slice(at + 1).trim() + ' ' + name.slice(0, at).trim()).trim();
+    }
+    name = tidyName(name);
+    if (name && !out.some(n => normName(n) === normName(name))) out.push(name);
+  });
+  return out;
+}
+
+/* What addClass would do, without doing it — so the dialog can say so first. */
+function previewClass(names) {
+  const fresh = [], known = [];
+  (names || []).forEach(n => (findPatronByName(n) ? known : fresh).push(n));
+  return { fresh: fresh, known: known };
+}
+
+function addClass(names, group) {
+  const clean = String(group || '').trim();
+  const added = [], moved = [], already = [];
+  (names || []).forEach(name => {
+    const was = findPatronByName(name);
+    const res = addPatron(name, clean ? { group: clean } : {});
+    if (!res.ok) return;
+    if (!was) { added.push(res.patron); return; }
+    if (clean && normName(was.group) !== normName(clean)) {
+      updatePatron(was.id, { group: clean });
+      moved.push(was);
+    } else already.push(was);
+  });
+  saveDB();
+  return { ok: true, added: added, moved: moved, already: already };
+}
+
 function updatePatron(id, fields) {
   const p = patronById(id);
   if (!p) return { ok: false, error: 'Student not found.' };

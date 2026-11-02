@@ -231,6 +231,39 @@ Both pages work at phone width. Three things are done differently there:
 
 The student station was already comfortable on a phone and is unchanged.
 
+### Putting it on the home screen
+
+Both pages install. On the home screen the library opens with its own icon and no address
+bar, and **it still opens when the Wi-Fi is down** — everything it needs is kept on the
+device, and the books you see are the ones it last synced.
+
+- **Chrome, Android:** Settings shows an **Add to home screen** button when the browser
+  offers it.
+- **Safari, iPhone and iPad:** tap **Share**, then **Add to Home Screen**. Safari makes no
+  offer a page can detect, so Settings spells the route out instead of showing a button
+  that could not work.
+
+The two pages install separately: the teacher's side from `/`, the station from `/student/`.
+Put the station on an iPad's home screen and it opens full-screen with nothing to wander
+off into.
+
+Only the pages themselves are fetched fresh each time. Everything else is requested with
+the `?v=` number, which never changes meaning, so it is kept and served instantly — see
+[Updating the app](#updating-the-app).
+
+## Adding a whole class
+
+**Students → Add a class** takes a pasted list, one name per line, and makes them all at
+once — which is what a card sheet of thirty wants.
+
+A list copied out of a gradebook usually arrives as `Okafor, Amara`, so there's a tick to
+turn the comma round, and anything after a tab is dropped so a trailing column does no harm.
+Blank lines and repeats are ignored. A name already in the library is recognised and left
+alone apart from its class, so a student who borrowed books last year keeps all of it rather
+than becoming a second record.
+
+Card numbers are not handed out here — printing the cards does that.
+
 ## Student library cards
 
 Students have always had a barcode field and the desk has always read it, but nothing
@@ -750,6 +783,11 @@ js/app.js           admin page: routing, views, and the circulation desk
 js/accounts.js      password-locked copies of the key, so a cleared browser can recover
 js/shelving.js      shelves, shelf-reading, stocktake and shelf cards
 js/barcode.js       Code 39 barcodes as SVG
+js/pwa.js           registers the service worker, and keeps the browser's install offer
+sw.js               serves the app from a cache so it opens offline
+manifest.webmanifest        the teacher's page as an installable app
+student/manifest.webmanifest  the station as an installable app
+icons/              the app icon: icon.svg is the source, the PNGs are built from it
 js/decode1d.js      reading Code 39 and EAN-13 out of a camera frame, for phones
                     whose browser has no barcode reader of its own
 js/scan.js          the camera viewfinder, and which reader to use
@@ -759,6 +797,7 @@ dev/build_genre_art.py  regenerates js/genre-art.js from genre-icons/
 dev/genre-icons.html    every icon at icon, tag and label size
 dev/serve.py            a no-cache dev server for the local copy
 dev/shelf-labels.html   the shelf card layouts, to compare on paper
+dev/build_icons.py      rebuilds icons/*.png from icons/*.svg (needs Chrome)
 dev/scan-test.html      the barcode reader, against printed and degraded barcodes
 .claude/launch.json     tells the editor how to start dev/serve.py
 ```
@@ -779,6 +818,19 @@ and connect with the key `test-key`.
 `index.html` and `student/index.html` load every file with a `?v=` number. **Bump it in both on every change you push**, or
 browsers (and GitHub Pages' ten-minute cache) can pair a new page with old scripts, which
 breaks the app until the cache expires.
+
+Those two files are still the only place the number is written. `js/pwa.js` is itself loaded
+with the `?v=`, reads it off its own URL and registers `sw.js?v=` with it, and the service
+worker names its cache after that. So bumping the number installs a new worker, builds a
+fresh cache and throws the old one away, with nothing else to remember.
+
+### The icon
+
+`icons/icon.svg` is the drawing. `icons/icon-maskable.svg` is the same art with a wide
+margin, because Android may crop an icon to a circle. `icons/favicon.svg` is a cut-down
+version for 16 and 32 pixels, where the full icon turns to mush. After editing any of them
+run `python3 dev/build_icons.py` to rebuild the PNGs that iOS and Android need, and bump
+`?v=` so the new ones are fetched.
 
 ## Trying it out
 
