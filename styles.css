@@ -726,6 +726,61 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 }
 .sl-num { font-family: var(--mono); font-size: 4.8pt; line-height: 1; margin-bottom: 0.02in; }
 
+/* ---------------- student library cards ---------------- */
+
+/* Three sizes off the same data. Two print the whole card onto stock; the
+   small one is a sticker for a card the student already carries. All three are
+   laid out in inches so the preview on screen is the printed size, and so the
+   sheet matches label stock sold with those measurements. */
+.lib-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #000;
+  background: #fff;
+  border: 1px dotted var(--border-strong);
+  break-inside: avoid;
+}
+.lc-lib { font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #444; line-height: 1; }
+.lc-name { font-weight: 650; line-height: 1.08; }
+.lc-class { color: #333; line-height: 1.2; }
+.lc-rules { color: #444; line-height: 1.25; }
+.lc-code { margin-top: auto; line-height: 0; }
+.lc-num { font-family: var(--mono); line-height: 1; letter-spacing: .04em; }
+.lc-blank { visibility: hidden; }
+
+/* 3½″ × 2″, two across and five down: the business-card sheet, and the size
+   that fits a pencil case. */
+.lib-card-card { width: 3.5in; height: 2in; padding: 0.14in 0.16in; gap: 0.04in; }
+.lib-card-card .lc-name { font-size: 15pt; }
+.lib-card-card .lc-class { font-size: 8pt; }
+.lib-card-card .lc-code .barcode { width: 2.6in; height: 0.42in; }
+.lib-card-card .lc-num { font-size: 6.5pt; margin-top: 0.02in; }
+
+/* 5″ × 3″, one across and three down. The extra room goes on the two rules a
+   student actually asks about, so the card answers them without a queue. */
+.lib-card-index { width: 5in; height: 3in; padding: 0.22in 0.26in; gap: 0.07in; }
+.lib-card-index .lc-lib { font-size: 8.5pt; }
+.lib-card-index .lc-name { font-size: 22pt; }
+.lib-card-index .lc-class { font-size: 10pt; }
+.lib-card-index .lc-rules { font-size: 8.5pt; }
+.lib-card-index .lc-code .barcode { width: 3.6in; height: 0.6in; }
+.lib-card-index .lc-num { font-size: 8pt; margin-top: 0.03in; }
+
+/* 2⅝″ × 1″, three across and ten down: the address-label sheet. This one is
+   stuck onto a card that already exists, so it carries the name and the
+   barcode and nothing else — there is no room to spare and nothing else is
+   needed on a card that already says who it belongs to. */
+.lib-card-sticker { width: 2.625in; height: 1in; padding: 0.07in 0.1in; gap: 0.01in; border-style: dotted; }
+.lib-card-sticker .lc-name { font-size: 8.5pt; }
+.lib-card-sticker .lc-code .barcode { width: 2.3in; height: 0.3in; }
+.lib-card-sticker .lc-num { font-size: 5.5pt; }
+
+.card-sheet { display: grid; justify-content: start; }
+.card-sheet-card { grid-template-columns: repeat(2, 3.5in); }
+.card-sheet-index { grid-template-columns: repeat(1, 5in); }
+.card-sheet-sticker { grid-template-columns: repeat(3, 2.625in); }
+
 .label-preview { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
 .preset-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
 .label-sheet { display: grid; grid-template-columns: repeat(11, 0.66in); }
@@ -767,6 +822,7 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
   /* Hairline cut guides; labels sit edge to edge so one cut serves two. */
   .spine-label { border: 0.25pt solid #bbb; margin: 0 -0.125pt -0.125pt 0; }
   .label-sheet + .label-sheet { break-before: page; page-break-before: always; }
+  .card-sheet + .card-sheet { break-before: page; page-break-before: always; }
   .shelf-card { border: 0.25pt solid #bbb; margin: 0 -0.125pt -0.125pt 0; }
   .spine-label.blank * { visibility: hidden; }
   .print-area { display: block; color: #000; background: #fff; font-size: 12pt; }

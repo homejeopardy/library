@@ -15,6 +15,8 @@ const DEFAULT_SETTINGS = {
   autoCreatePatrons: true,
   barcodePrefix: 'CL',
   nextBarcode: 1,
+  patronPrefix: 'ST',
+  nextPatronCard: 1,
   labelPresets: [],
   holdSpot: '',
   // The classroom's own categories — rename, add or delete in Settings.
@@ -321,6 +323,48 @@ function nextBarcode() {
   } while (findItemByCode(code));
   s.nextBarcode = n;
   return code;
+}
+
+/* A number for a student's library card. Kept clear of book barcodes as well
+   as of other students', because the desk reads one box and whichever kind of
+   thing the barcode names has to be the only one it could be. */
+function nextPatronCard() {
+  const s = S();
+  let n = s.nextPatronCard || 1;
+  let code;
+  do {
+    code = (s.patronPrefix || 'ST') + '-' + String(n).padStart(4, '0');
+    n++;
+  } while (findItemByCode(code) || findPatronByCode(code) || findShelfByScan(code));
+  s.nextPatronCard = n;
+  return code;
+}
+
+/* Gives a card number to everyone in the list who hasn't got one. Printing a
+   card is what calls this: a number with no card in a pocket somewhere is of
+   no use to anyone, and handing them out at random would waste the series. */
+function giveCardNumbers(patrons) {
+  const given = [];
+  (patrons || []).forEach(p => {
+    const patron = patronById(p.id);
+    if (!patron || patron.barcode) return;
+    patron.barcode = nextPatronCard();
+    given.push(patron);
+  });
+  if (given.length) saveDB();
+  return given;
+}
+
+/* Remembers that a card has been printed, so a later run can offer only the
+   students who have never had one — the same bargain as book labels. */
+function markCardsPrinted(patrons, on) {
+  (patrons || []).forEach(p => {
+    const patron = patronById(p.id);
+    if (!patron) return;
+    if (on) patron.cardPrintedAt = nowISO();
+    else delete patron.cardPrintedAt;
+  });
+  saveDB();
 }
 
 function addItem(fields) {

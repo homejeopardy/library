@@ -85,6 +85,7 @@ const NEEDS = {
   'scan-isbn': 'catalog', 'scan-barcode': 'catalog',
 
   'print-labels': 'print', 'print-notices': 'print', 'print-shelflist': 'print',
+  'print-cards': 'print',
   'pick-labels': 'print', 'unmark-labelled': 'print',
 
   'del-item': 'remove',
@@ -1769,11 +1770,12 @@ VIEWS.patrons = function () {
         <option value="__none__" ${ui.patronGroup === '__none__' ? 'selected' : ''}>No class set (${DB.patrons.filter(p => !p.group).length})</option>
       </select>` : ''}
       <span class="spacer"></span>
+      <button class="btn" data-act="print-cards">Print cards</button>
       <button class="btn btn-primary" data-act="new-patron">Add a student</button>
     </div>
     ${people.length ? `
     <table class="table">
-      <thead><tr><th>Name</th><th>Class</th><th>Out</th><th>Overdue</th><th>Lifetime</th><th>Since</th></tr></thead>
+      <thead><tr><th>Name</th><th>Class</th><th>Card</th><th>Out</th><th>Overdue</th><th>Lifetime</th><th>Since</th></tr></thead>
       <tbody>
         ${people.map(p => {
           const out = activeLoansForPatron(p.id);
@@ -1781,6 +1783,7 @@ VIEWS.patrons = function () {
           return `<tr>
             <td><button class="link strong" data-act="open-patron" data-id="${p.id}">${esc(p.name)}</button></td>
             <td class="muted">${esc(p.group || '—')}</td>
+            <td class="mono small ${p.barcode ? 'muted' : ''}">${p.barcode ? esc(p.barcode) : '<span class="muted">none yet</span>'}</td>
             <td>${out.length || '—'}</td>
             <td class="${late ? 'danger strong' : 'muted'}">${late || '—'}</td>
             <td class="muted">${loansForPatron(p.id).length}</td>
@@ -2022,6 +2025,7 @@ VIEWS.settings = function () {
     <div class="grid-2">
       ${field('Library name', 'libraryName', s.libraryName)}
       ${field('Barcode prefix', 'barcodePrefix', s.barcodePrefix)}
+      ${field('Card prefix for students', 'patronPrefix', s.patronPrefix)}
       ${field('Loan length (days)', 'loanDays', s.loanDays, { type: 'number' })}
       ${field('Grace days before "overdue"', 'graceDays', s.graceDays, { type: 'number' })}
       ${field('Renewals allowed', 'maxRenewals', s.maxRenewals, { type: 'number' })}
@@ -2361,6 +2365,7 @@ Object.assign(ACTIONS, {
     Object.assign(S(), {
       libraryName: get('libraryName').value.trim() || 'Classroom Library',
       barcodePrefix: get('barcodePrefix').value.trim().toUpperCase() || 'CL',
+      patronPrefix: get('patronPrefix').value.trim().toUpperCase() || 'ST',
       loanDays: num('loanDays', 1, 14),
       graceDays: num('graceDays', 0, 0),
       maxRenewals: num('maxRenewals', 0, 2),
@@ -2599,6 +2604,144 @@ const LABEL_ORDERS = [
   ['author', 'Author, then title',
     (a, b) => normName(a.author || '~').localeCompare(normName(b.author || '~')) || byTitle(a, b)]
 ];
+
+/* ---------------------------------------------------------------
+   Student library cards.
+
+   The desk reads a student's card the same way it reads a book, but
+   until now nothing gave a student a number or put one on paper. This
+   does both: printing a card is what hands out the number, because a
+   number with no card in a pocket is no use to anyone.
+
+   Three sizes, all matching stock that is sold by those measurements,
+   so a sheet lines up without anyone measuring anything.
+   --------------------------------------------------------------- */
+
+const CARD_LAYOUTS = {
+  card: {
+    name: 'Card, 3½″ × 2″', per: 10, across: 2,
+    stock: 'business-card sheets (Avery 5371 and the like), or plain cardstock cut along the guides',
+    note: 'Ten to a sheet, two across and five down.'
+  },
+  index: {
+    name: 'Index card, 5″ × 3″', per: 3, across: 1,
+    stock: 'cardstock cut along the guides',
+    note: 'Three to a sheet, one above the other. Big, hard to lose, and it has room for the rules.'
+  },
+  sticker: {
+    name: 'Sticker, 2⅝″ × 1″', per: 30, across: 3,
+    stock: 'address-label sheets (Avery 5160, 8160, and anything sold as 30-per-sheet)',
+    note: 'Thirty to a sheet. Stick one onto a card the student already carries.'
+  }
+};
+
+/* One card. The index size has room for the two rules a student actually asks
+   about, so it carries them and the smaller ones do not. */
+function studentCardHTML(patron, layout) {
+  const kind = CARD_LAYOUTS[layout] ? layout : 'card';
+  const code = patron.barcode || '';
+  const rules = kind === 'index'
+    ? `<span class="lc-rules">${S().maxItems > 0 ? plural(S().maxItems, 'book') + ' at a time' : 'No limit on books'}
+       &middot; ${plural(S().loanDays, 'day')} each</span>`
+    : '';
+  return `<div class="lib-card lib-card-${kind}">
+    ${kind === 'sticker' ? '' : `<span class="lc-lib">${esc(S().libraryName)}</span>`}
+    <span class="lc-name">${esc(patron.name)}</span>
+    ${kind === 'sticker' || !patron.group ? '' : `<span class="lc-class">${esc(patron.group)}</span>`}
+    ${rules}
+    <span class="lc-code">${code ? code39SVG(code) : ''}</span>
+    <span class="lc-num">${esc(code)}</span>
+  </div>`;
+}
+
+/* Blanks fill the spaces already peeled off a part-used sheet. They keep the
+   border so the preview still reads as a sheet, but print nothing. */
+function printStudentCards(patrons, layout, skip) {
+  const kind = CARD_LAYOUTS[layout] ? layout : 'card';
+  const blanks = Array(Math.max(0, skip || 0))
+    .fill(`<div class="lib-card lib-card-${kind} lc-blank"></div>`).join('');
+  printHTML(`<div class="card-sheet card-sheet-${kind}">${blanks}${patrons.map(p => studentCardHTML(p, kind)).join('')}</div>`,
+    patrons.length === 1 ? 'Library card ' + patrons[0].name : 'Library cards');
+}
+
+/* Who to print for. "Never had one" is the one that gets used in September,
+   when a class has been added and everyone else was done last year. */
+function cardScopes() {
+  const all = DB.patrons.slice().sort((a, b) => a.name.localeCompare(b.name));
+  return {
+    'new': ['Students who have never had a card', all.filter(p => !p.cardPrintedAt)],
+    'all': ['Every student', all],
+    'class': ['One class', all]
+  };
+}
+
+ACTIONS['print-cards'] = () => {
+  const groups = patronGroups();
+
+  function draw(scope, group, layout, skip) {
+    const scopes = cardScopes();
+    const chosen = scopes[scope] ? scope : 'new';
+    let people = scopes[chosen][1];
+    if (chosen === 'class') people = people.filter(p => normName(p.group) === normName(group));
+    const kind = CARD_LAYOUTS[layout] ? layout : 'card';
+    const sheet = CARD_LAYOUTS[kind];
+    const fresh = people.filter(p => !p.barcode).length;
+
+    openModal('Print library cards', `
+      <label class="field"><span>Who</span>
+        <select name="scope">${Object.keys(scopes).map(k =>
+          `<option value="${k}" ${k === chosen ? 'selected' : ''}>${esc(scopes[k][0])}${k === 'class' ? '' : ' (' + scopes[k][1].length + ')'}</option>`).join('')}</select></label>
+      ${chosen === 'class' ? `<label class="field"><span>Which class</span>
+        <select name="group">${groups.map(g =>
+          `<option value="${esc(g)}" ${normName(g) === normName(group) ? 'selected' : ''}>${esc(g)} (${DB.patrons.filter(p => normName(p.group) === normName(g)).length})</option>`).join('')}</select></label>` : ''}
+      <label class="field"><span>Size</span>
+        <select name="layout">${Object.keys(CARD_LAYOUTS).map(k =>
+          `<option value="${k}" ${k === kind ? 'selected' : ''}>${esc(CARD_LAYOUTS[k].name)}</option>`).join('')}</select></label>
+      <p class="hint">${esc(sheet.note)} Print onto ${esc(sheet.stock)}.</p>
+      <label class="field"><span>Skip this many spaces on the sheet</span>
+        <input name="skip" type="number" min="0" max="${sheet.per - 1}" value="${Math.min(skip, sheet.per - 1)}">
+      </label>
+      <p class="hint">Starts at the top-left. Skip spaces to carry on down a part-used sheet.</p>
+      ${fresh ? `<p class="note">${plural(fresh, 'student has', 'students have')} no card number yet.
+        Printing gives ${fresh === 1 ? 'them one' : 'them each one'} — ${esc((S().patronPrefix || 'ST') + '-' + String(S().nextPatronCard || 1).padStart(4, '0'))} onwards.</p>` : ''}
+      <h3 class="section-title">How they will print — actual size</h3>
+      <div class="label-preview">${people.length
+        ? studentCardHTML(Object.assign({}, people[0], { barcode: people[0].barcode || (S().patronPrefix || 'ST') + '-0000' }), kind)
+        : '<p class="muted">Nobody to print for.</p>'}</div>
+      <label class="check">
+        <input type="checkbox" name="mark" checked>
+        <span>Remember that these have been printed, so later runs can offer only new students</span>
+      </label>
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="do-print" ${people.length ? '' : 'disabled'}>Print ${plural(people.length, 'card')}</button>
+        <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+      </div>
+      <p class="hint">Set your printer to actual size, not “fit to page”, or the barcodes come out
+        too narrow to scan.</p>
+    `, body => {
+      const get = n => body.querySelector('[name="' + n + '"]');
+      const skipNow = () => Math.max(0, Number(get('skip').value) || 0);
+      const groupNow = () => (get('group') ? get('group').value : group);
+      ['scope', 'group', 'layout'].forEach(n => {
+        const el = get(n);
+        if (el) el.addEventListener('change', () => draw(get('scope').value, groupNow(), get('layout').value, skipNow()));
+      });
+      body.querySelector('#do-print').addEventListener('click', () => {
+        const marking = get('mark').checked;
+        const printing = people.slice();
+        closeModal();
+        // The numbers are handed out first, so the cards carry them.
+        const given = giveCardNumbers(printing);
+        printStudentCards(printing.map(p => patronById(p.id) || p), kind, skipNow());
+        if (marking) markCardsPrinted(printing, true);
+        if (given.length) toast(plural(given.length, 'student') + ' given a card number.', 'ok');
+        render();
+      });
+    });
+  }
+
+  draw('new', groups[0] || '', 'card', 0);
+};
 
 function labelHTML(item) {
   return `<div class="spine-label">

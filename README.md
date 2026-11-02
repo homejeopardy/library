@@ -231,6 +231,40 @@ Both pages work at phone width. Three things are done differently there:
 
 The student station was already comfortable on a phone and is unchanged.
 
+## Student library cards
+
+Students have always had a barcode field and the desk has always read it, but nothing
+filled it in or put it on paper. **Students → Print cards** does both. Printing is what
+hands out the number — a number with no card in anyone's pocket is no use — and the Card
+column in the students table shows who has one.
+
+Three sizes, all matching stock sold by those measurements, so a sheet lines up without
+measuring anything:
+
+| Size | Per sheet | Print onto |
+| --- | --- | --- |
+| **Card, 3½″ × 2″** | 10, two across | Business-card sheets (Avery 5371 and the like), or cardstock cut along the guides |
+| **Index card, 5″ × 3″** | 3, one above the other | Cardstock cut along the guides |
+| **Sticker, 2⅝″ × 1″** | 30, three across | Address-label sheets (Avery 5160, 8160, anything sold as 30-per-sheet) |
+
+The first two print a whole card. The sticker is for a card a student already carries — a
+school ID, an index card in a pencil case — so it holds the name and the barcode and
+nothing else. The index card has the room to answer the two questions students actually
+ask, so it prints **how many books at a time** and **how many days**, taken from Settings.
+
+Print for **students who have never had a card** (the one you want in September, when a
+class has been added and everyone else was done last year), for **one class**, or for
+**everyone**. **Skip this many spaces** carries on down a part-used sheet, as with spine
+labels.
+
+Card numbers run `ST-0001`, `ST-0002`, … — the prefix is **Settings → Card prefix for
+students**. They are kept clear of book barcodes and shelf codes, because the desk reads one
+box and whatever a barcode names has to be the only thing it could be.
+
+Set the printer to **actual size**, not "fit to page". At actual size a narrow bar is
+15–24 thousandths of an inch depending on the size chosen, which is comfortable for a
+scanner and for a phone camera; shrunk to fit, it isn't.
+
 ## Scanning with a phone
 
 A phone can stand in for the USB scanner. Wherever there is something to scan there is a
@@ -630,7 +664,8 @@ students pick books other students liked), and in **Reports → What students th
 | Renewals allowed | 2 | A book with someone waiting can't be renewed |
 | Books out at once | 3 | `0` removes the limit |
 | Add students automatically | on | Turn off to require adding students by hand first |
-| Barcode prefix | `CL` | Used for generated barcodes |
+| Barcode prefix | `CL` | Used for generated book barcodes |
+| Card prefix for students | `ST` | Used for generated student card numbers |
 
 Limits and holds are *soft* — the app warns and asks before letting you override, so the
 rules never stop you from doing the sensible thing in the moment.
