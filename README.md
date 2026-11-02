@@ -216,15 +216,81 @@ The intended rhythm at the desk, with a scanner and no mouse:
 For a stack of books, use **Add & add another**: the next dialog opens blank, ready for the
 next ISBN, and suggests a genre for that book.
 
+## On a phone
+
+Both pages work at phone width. Three things are done differently there:
+
+- The seven tabs sit on **one row that scrolls sideways** rather than wrapping onto two,
+  which on a 375px screen took a fifth of the height before a single book was visible.
+- **Tables scroll sideways** and keep their natural column widths. Squeezed to fit, one
+  long title wrapped onto six lines and the row stopped being readable; the title or name
+  still wraps, between a floor and a ceiling, because it's the column worth reading in full.
+- **Form fields are 16px on a phone.** Below that, iOS zooms the whole page in when a field
+  is tapped and never zooms back out, leaving you dragging the page around after every
+  search.
+
+The student station was already comfortable on a phone and is unchanged.
+
+## Scanning with a phone
+
+A phone can stand in for the USB scanner. Wherever there is something to scan there is a
+**Scan** button, and it opens a viewfinder that keeps reading until you tap Done — point,
+beep, point at the next one. There are three of them:
+
+| Where | What it does |
+| --- | --- |
+| **Circulation → Scan with the camera** | Scan a student's card, then their books. A book that's out goes back in; a book that's in goes out to whoever was scanned last. Each one is said on screen, so you never have to look away from the pile |
+| **Add or edit a book → Scan** | One beside ISBN for the back-cover barcode, one beside Barcode for the spine label. Each fills its field and closes. A label already on another book is refused and the field left alone |
+| **Shelves → Scan a shelf card**, and **Scan with the camera** on a shelf's page | Walk the shelves with the phone instead of carrying a laptop. Every scan files that book where it stands and says so — including "This is Graphic Novels, not Realistic Fiction" |
+
+It reads the spine labels this app prints (Code 39) and the ISBN on the back of a book
+(EAN-13, and the UPC-A barcodes that amount to the same thing). Nothing else — a QR code
+is ignored on purpose, so that a sticker on the back of a phone case can't check a book out.
+
+**The button only appears on a device with a camera on its back.** A laptop never shows it.
+Working that out without raising a permission prompt takes a moment, so the first time on a
+new phone the button may appear a second after the page does; after that the answer is
+remembered. If a device turns out to have only a screen-side camera, it says so once and
+the buttons stop appearing.
+
+The camera needs the real site — `lib.catherine-crump.com` — or a local dev server. Opening
+`index.html` straight off the disk gives no camera, because browsers only allow one on a
+secure page.
+
+### Which reader does the work
+
+Chrome on Android has a barcode reader built into the browser and that one is used.
+Safari on the iPhone has none, so `js/decode1d.js` reads the picture instead: it takes
+straight lines of pixels across the frame and down it, measures the light and dark
+stretches, and reads the widths. Both are told to look for the same two symbologies, so a
+label that scans on one phone scans on the other.
+
+`dev/scan-test.html` is the proof. It draws barcodes the app itself would print, degrades
+them the way a camera would — soft focus, a dim room, a shadow across half the label, held
+upside down, held on its side — and checks what comes back. It also throws blank paper,
+even stripes, a line of text and four hundred frames of pure camera noise at it and fails
+if a single barcode is invented, because reading the wrong book is worse than reading none.
+The last table on that page measures how soft a picture can get before it stops reading.
+
+Lines are tried across the frame **and down it**, because a spine label is printed along
+the long edge: a book stood up on a shelf shows its barcode on its side.
+
 ## Shelves
 
-A shelf is a physical place that holds one genre — and a genre may fill several shelves,
-each with its own code and, if you like, a stretch of the alphabet.
+A shelf is a physical place that holds one or more genres — and a genre may fill several
+shelves, each with its own code and, if you like, a stretch of the alphabet. The two don't
+line up, which is why shelves are recorded separately from genres.
 
-**Shelves → Add a shelf**, give it a code like `A3`, say where it is and which genre lives
-there, then **Print shelf cards** and stick each card on its shelf. A card is 3&Prime; × 1&Prime;:
-the code large enough to read across the room, the genre and location beside it, and a
-scannable Code 39 of `SHELF-A3`.
+**Shelves → Add a shelf**, give it a code like `A3`, say where it is and **tick the genres
+that live there**, then **Print shelf cards** and stick each card on its shelf. A card is
+3&Prime; × 1&Prime;: the code large enough to read across the room, the genres and location beside
+it, and a scannable Code 39 of `SHELF-A3`.
+
+Tick more than one where a shelf holds a mixture — a case of Biography and Nonfiction, say,
+or the one shelf that takes both halves of a split genre. A book is only a stray if it
+matches **none** of them. Tick none and the shelf takes anything without complaint. Up to
+three genres get their pictures on the printed card; beyond that it prints the names only,
+because the drawings stop being readable at that size.
 
 ### Filing a shelf
 
@@ -269,9 +335,12 @@ set to match.
 ### Keeping shelves honest
 
 The Shelves tab counts **books not on a shelf**, **books in the wrong genre** (every book
-whose genre differs from its shelf's, with a list), and **cards to reprint**. A card goes
-out of date when you change a shelf's code, place, genre or letters after printing it —
-**Print only the out-of-date cards** does just those.
+whose genre is none of the ones its shelf holds, with a list), and **cards to reprint**. A
+card goes out of date when you change a shelf's code, place, genres or letters after
+printing it — **Print only the out-of-date cards** does just those.
+
+Renaming a genre in Settings renames it on every shelf that holds it, and deleting one
+takes it off those shelves, so a shelf is never left holding a genre that no longer exists.
 
 ### What students see
 
@@ -620,12 +689,17 @@ js/app.js           admin page: routing, views, and the circulation desk
 js/accounts.js      password-locked copies of the key, so a cleared browser can recover
 js/shelving.js      shelves, shelf-reading, stocktake and shelf cards
 js/barcode.js       Code 39 barcodes as SVG
+js/decode1d.js      reading Code 39 and EAN-13 out of a camera frame, for phones
+                    whose browser has no barcode reader of its own
+js/scan.js          the camera viewfinder, and which reader to use
 genre-icons/        one SVG per genre (source for js/genre-art.js)
 dev/mock_github_api.py  a local stand-in for GitHub's API, for testing sync
 dev/build_genre_art.py  regenerates js/genre-art.js from genre-icons/
 dev/genre-icons.html    every icon at icon, tag and label size
 dev/serve.py            a no-cache dev server for the local copy
 dev/shelf-labels.html   the shelf card layouts, to compare on paper
+dev/scan-test.html      the barcode reader, against printed and degraded barcodes
+.claude/launch.json     tells the editor how to start dev/serve.py
 ```
 
 Plain JavaScript with no framework and no build step, so the whole thing stays editable

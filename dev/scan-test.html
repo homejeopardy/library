@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Barcode reader test</title>
+<style>
+  body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 24px; }
+  table { border-collapse: collapse; margin-top: 12px; }
+  td, th { border-bottom: 1px solid #ddd; padding: 4px 10px; text-align: left; font-size: 13px; }
+  .pass { color: #1f6b45; } .fail { color: #a32b26; font-weight: 600; }
+  canvas { image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<h1>Barcode reader test</h1>
+<p>Draws barcodes the app itself would print, hands the pixels to
+<code>Decode1D</code>, and checks what comes back. Degraded cases stand in for
+a phone camera: a soft lens, a dim room, a shadow across the label.</p>
+<div id="out">Running…</div>
+<canvas id="peek" width="420" height="140"></canvas>
+
+<script src="../js/barcode.js"></script>
+<script src="../js/decode1d.js"></script>
+<script>
+const EAN_L = [[3,2,1,1],[2,2,2,1],[2,1,2,2],[1,4,1,1],[1,1,3,2],
+               [1,2,3,1],[1,1,1,4],[1,3,1,2],[1,2,1,3],[3,1,1,2]];
+const EAN_PARITY = ['OOOOOO','OOEOEE','OOEEOE','OOEEEO','OEOOEE',
+                    'OEEOOE','OEEEOO','OEOEOE','OEOEEO','OEEOEO'];
+
+function bitsFromWidths(widths, startDark) {
+  let bits = '', dark = startDark;
+  widths.forEach(w => { bits += (dark ? '1' : '0').repeat(w); dark = !dark; });
+  return bits;
+}
+
+/* The 95 modules of an EAN-13, as a string of 0s and 1s. */
+function ean13Bits(digits) {
+  const parity = EAN_PARITY[+digits[0]];
+  let bits = '101';
+  for (let i = 1; i <= 6; i++) {
+    const w = EAN_L[+digits[i]];
+    bits += bitsFromWidths(parity[i-1] === 'O' ? w : w.slice().reverse(), false);
+  }
+  bits += '01010';
+  for (let i = 7; i <= 12; i++) bits += bitsFromWidths(EAN_L[+digits[i]], true);
+  return bits + '101';
+}
+
+function ean13Check(twelve) {
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += (+twelve[i]) * (i % 2 ? 3 : 1);
+  return String((10 - sum % 10) % 10);
+}
+
+/* Code 39 as modules, from the same table the app prints with. */
+function code39Bits(text) {
+  const chars = ('*' + text.toUpperCase() + '*').split('');
+  let bits = '';
+  chars.forEach((ch, n) => {
+    const p = CODE39[ch];
+    for (let i = 0; i < 9; i++) bits += (i % 2 === 0 ? '1' : '0').repeat(p[i] === 'w' ? 5 : 2);
+    if (n < chars.length - 1) bits += '0'.repeat(2);
+  });
+  return bits;
+}
+
+/* Paints a module string onto a canvas, optionally on its side, then degrades
+   it the way a phone camera would. Returns the ImageData. */
+function render(bits, opts) {
+  opts = opts || {};
+  const scale = opts.scale || 3, quiet = 20 * scale, bar = opts.barHeight || 80;
+  const long = bits.length * scale + quiet * 2;
+  const c = document.createElement('canvas');
+  const vertical = !!opts.vertical;
+  c.width = vertical ? bar : long;
+  c.height = vertical ? long : bar;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = opts.ink || '#000';
+  for (let i = 0; i < bits.length; i++) {
+    if (bits[i] !== '1') continue;
+    if (vertical) g.fillRect(0, quiet + i * scale, bar, scale);
+    else g.fillRect(quiet + i * scale, 0, scale, bar);
+  }
+  if (opts.blur) {
+    // Onto a fresh white canvas, or the blurred copy composites over the sharp
+    // one and every bar comes out fatter instead of softer — which is not what
+    // a camera does, and quietly makes the test easier than real life.
+    const b = document.createElement('canvas');
+    b.width = c.width; b.height = c.height;
+    const bg = b.getContext('2d', { willReadFrequently: true });
+    bg.fillStyle = '#fff'; bg.fillRect(0, 0, b.width, b.height);
+    bg.filter = 'blur(' + opts.blur + 'px)';
+    bg.drawImage(c, 0, 0);
+    bg.filter = 'none';
+    g.clearRect(0, 0, c.width, c.height);
+    g.drawImage(b, 0, 0);
+  }
+  if (opts.shadow) {                       // a hand or a shelf edge over one end
+    g.fillStyle = 'rgba(0,0,0,' + opts.shadow + ')';
+    if (vertical) g.fillRect(0, 0, c.width, c.height / 2);
+    else g.fillRect(0, 0, c.width / 2, c.height);
+  }
+  if (opts.flip) {                          // held the other way up
+    const f = document.createElement('canvas');
+    f.width = c.width; f.height = c.height;
+    const fg = f.getContext('2d', { willReadFrequently: true });
+    fg.translate(f.width, f.height); fg.rotate(Math.PI); fg.drawImage(c, 0, 0);
+    return fg.getImageData(0, 0, f.width, f.height);
+  }
+  if (opts.noise) {
+    const d = g.getImageData(0, 0, c.width, c.height);
+    for (let i = 0; i < d.data.length; i += 4) {
+      const n = (Math.random() - 0.5) * opts.noise;
+      d.data[i] += n; d.data[i+1] += n; d.data[i+2] += n;
+    }
+    g.putImageData(d, 0, 0);
+  }
+  return g.getImageData(0, 0, c.width, c.height);
+}
+
+const cases = [];
+function check(name, bits, want, opts) { cases.push({ name, bits, want, opts: opts || {} }); }
+
+// Spine labels, exactly as the app prints them.
+['CL-0001', 'CL-0042', 'CL-0607', 'SHELF-A1', 'SHELF-B2'].forEach(code =>
+  check('Code 39 ' + code, code39Bits(code), code));
+
+// A spine label is printed along the long edge, so a book stood up on a shelf
+// shows its barcode on its side.
+check('Code 39 on its side', code39Bits('CL-0042'), 'CL-0042', { vertical: true });
+check('Code 39 upside down', code39Bits('CL-0042'), 'CL-0042', { flip: true });
+check('Code 39, soft focus', code39Bits('CL-0042'), 'CL-0042', { blur: 1.4 });
+check('Code 39, very soft', code39Bits('CL-0042'), 'CL-0042', { blur: 2.2 });
+check('Code 39, shadow over half', code39Bits('CL-0042'), 'CL-0042', { shadow: 0.45 });
+check('Code 39, grainy and dim', code39Bits('CL-0042'), 'CL-0042', { noise: 60, ink: '#333' });
+check('Code 39, small in frame', code39Bits('CL-0042'), 'CL-0042', { scale: 1 });
+check('Code 39, grey ink', code39Bits('CL-0042'), 'CL-0042', { ink: '#555' });
+
+// ISBNs off the back of real books.
+['978044100000', '978031636545', '978006085052', '978054579056'].forEach(twelve => {
+  const full = twelve + ean13Check(twelve);
+  check('EAN-13 ' + full, ean13Bits(full), full);
+});
+const isbn = '9780441000029'.slice(0, 12) + ean13Check('9780441000029'.slice(0, 12));
+check('EAN-13 on its side', ean13Bits(isbn), isbn, { vertical: true });
+check('EAN-13 upside down', ean13Bits(isbn), isbn, { flip: true });
+check('EAN-13, soft focus, barcode fills the frame', ean13Bits(isbn), isbn, { scale: 6, blur: 1.4 });
+check('EAN-13, shadow over half', ean13Bits(isbn), isbn, { shadow: 0.45 });
+check('EAN-13, grainy and dim', ean13Bits(isbn), isbn, { noise: 60, ink: '#333' });
+
+// Things that are not barcodes at all: these must read as nothing, not as a
+// book number. A reader that invents a barcode is worse than one that fails.
+const blank = { name: 'blank paper', make: () => {
+  const c = document.createElement('canvas'); c.width = 400; c.height = 90;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 400, 90);
+  return g.getImageData(0, 0, 400, 90);
+} };
+const stripes = { name: 'even stripes (a radiator, a blind)', make: () => {
+  const c = document.createElement('canvas'); c.width = 400; c.height = 90;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 400, 90);
+  g.fillStyle = '#000';
+  for (let x = 0; x < 400; x += 12) g.fillRect(x, 0, 6, 90);
+  return g.getImageData(0, 0, 400, 90);
+} };
+const words = { name: 'a line of text', make: () => {
+  const c = document.createElement('canvas'); c.width = 400; c.height = 90;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 400, 90);
+  g.fillStyle = '#000'; g.font = '28px serif';
+  g.fillText('The Absolutely True Diary', 8, 55);
+  return g.getImageData(0, 0, 400, 90);
+} };
+const noise = { name: 'camera noise, nothing in frame', make: () => {
+  const c = document.createElement('canvas'); c.width = 400; c.height = 90;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  const d = g.createImageData(400, 90);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const v = 90 + Math.random() * 80;
+    d.data[i] = d.data[i+1] = d.data[i+2] = v; d.data[i+3] = 255;
+  }
+  return d;
+} };
+
+const rows = [];
+let pass = 0, fail = 0;
+cases.forEach(c => {
+  const img = render(c.bits, c.opts);
+  const t0 = performance.now();
+  const got = Decode1D.read(img);
+  const ms = (performance.now() - t0).toFixed(1);
+  const ok = got === c.want;
+  ok ? pass++ : fail++;
+  rows.push(`<tr><td>${c.name}</td><td>${c.want}</td><td>${got === null ? '<em>nothing</em>' : got}</td>
+    <td>${ms} ms</td><td class="${ok ? 'pass' : 'fail'}">${ok ? 'read' : 'MISSED'}</td></tr>`);
+});
+/* One frame proves nothing about a reader that invents codes: the question is
+   how often it does it. Each of these is run many times, and a single
+   invented barcode out of the lot is a failure — it would check out the wrong
+   book, which is worse than not reading the label at all. */
+const TRIES = 400;
+[blank, stripes, words, noise].forEach(c => {
+  let invented = null, count = 0;
+  const t0 = performance.now();
+  for (let n = 0; n < TRIES; n++) {
+    const got = Decode1D.read(c.make());
+    if (got !== null) { count++; if (!invented) invented = got; }
+  }
+  const ms = ((performance.now() - t0) / TRIES).toFixed(1);
+  const ok = count === 0;
+  ok ? pass++ : fail++;
+  rows.push(`<tr><td>${c.name} &times;${TRIES}</td><td><em>nothing</em></td>
+    <td>${ok ? '<em>nothing</em>' : count + ' invented, e.g. ' + invented}</td>
+    <td>${ms} ms</td><td class="${ok ? 'pass' : 'fail'}">${ok ? 'ignored' : 'INVENTED A CODE'}</td></tr>`);
+});
+
+document.getElementById('out').innerHTML =
+  `<p><strong>${pass} of ${pass + fail}</strong> ${fail ? '— <span class="fail">' + fail + ' failed</span>' : '— all good'}</p>
+   <table><thead><tr><th>Case</th><th>Printed</th><th>Read</th><th>Time</th><th></th></tr></thead>
+   <tbody>${rows.join('')}</tbody></table>`;
+
+/* Where it gives up. Not pass or fail — a measurement, so that the limit is
+   written down somewhere instead of being found out in a classroom. `scale` is
+   how many pixels wide one module is; an EAN-13 is 95 modules across, a
+   CL-0000 spine label about 220, so scale 6 is a barcode filling most of the
+   frame and scale 2 is one held well back. */
+const sweep = [];
+[['Code 39 spine label', code39Bits('CL-0042'), 'CL-0042'],
+ ['EAN-13 ISBN', ean13Bits(isbn), isbn]].forEach(([name, bits, want]) => {
+  [6, 4, 3, 2].forEach(scale => {
+    let worst = 0;
+    for (let blur = 0; blur <= 6; blur += 0.25) {
+      if (Decode1D.read(render(bits, { scale, blur })) === want) worst = blur; else break;
+    }
+    sweep.push(`<tr><td>${name}</td><td>${scale}px per module</td>
+      <td>${worst ? 'reads up to a ' + worst.toFixed(2) + 'px blur' : '<span class="fail">does not read even sharp</span>'}</td></tr>`);
+  });
+});
+document.getElementById('out').innerHTML +=
+  `<h2>How soft a picture can be</h2>
+   <table><thead><tr><th>Symbol</th><th>Size in frame</th><th>Limit</th></tr></thead>
+   <tbody>${sweep.join('')}</tbody></table>
+   <p>A live viewfinder gets twenty-odd frames a second, so a frame lost to a
+   wobble or to autofocus costs nothing — the next one reads.</p>`;
+
+// A look at one frame, so a failure can be eyeballed.
+(function () {
+  const img = render(code39Bits('CL-0042'), { blur: 1.4 });
+  const c = document.getElementById('peek');
+  c.width = img.width; c.height = img.height;
+  c.getContext('2d').putImageData(img, 0, 0);
+})();
+</script>
+</body>
+</html>

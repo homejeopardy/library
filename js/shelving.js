@@ -62,6 +62,7 @@ function shelfListHTML() {
       <p class="hint">${shelves.length
         ? plural(shelves.length, 'shelf', 'shelves') + ' &middot; ' + plural(unshelved, 'book') + ' not on a shelf yet'
         : 'No shelves yet. Add one below, print its card, and stick it on the shelf.'}</p>
+      ${shelves.length ? camButtonHTML('scan-shelf-card', 'Scan a shelf card') : ''}
     </div>
 
     ${shelves.length ? `${stocktakeHTML(shelves)}
@@ -78,7 +79,7 @@ function shelfListHTML() {
         <td><button class="link strong mono" data-act="shelf-page" data-id="${s.id}">${esc(s.code)}</button>
             ${shelfCardStale(s) ? '<div class="small"><span class="badge badge-warn">card out of date</span></div>' : ''}</td>
         <td class="muted">${esc(s.name || '—')}</td>
-        <td>${s.genre ? genreTagHTML(s.genre) : '<span class="muted">any</span>'}</td>
+        <td>${shelfGenres(s).length ? shelfGenres(s).map(genreTagHTML).join(' ') : '<span class="muted">any</span>'}</td>
         <td class="muted mono small">${s.fromLetters || s.toLetters ? esc((s.fromLetters || '…') + ' – ' + (s.toLetters || '…')) : '—'}</td>
         <td>${itemsOnShelf(s.id).length}</td>
         <td class="muted small">${s.lastFiledAt ? esc(fmtDate(s.lastFiledAt)) : 'never'}</td>
@@ -124,13 +125,13 @@ function stocktakeHTML(shelves) {
 
 function shelfPageHTML(shelf) {
   const books = shelfContents(shelf.id);
-  const strays = books.filter(i => shelf.genre && i.genre && normName(i.genre) !== normName(shelf.genre));
+  const strays = books.filter(i => shelfGenres(shelf).length && i.genre && !shelfHoldsGenre(shelf, i.genre));
   return `
   <section class="pane">
     <div class="shelf-head">
       <div>
         <h2 class="shelf-code">${esc(shelf.code)}</h2>
-        <p class="item-sub">${esc(shelf.name || '')}${shelf.genre ? (shelf.name ? ' &middot; ' : '') + esc(shelf.genre) : ''}
+        <p class="item-sub">${esc(shelf.name || '')}${shelfGenres(shelf).length ? (shelf.name ? ' &middot; ' : '') + esc(shelfGenreText(shelf)) : ''}
           ${shelf.fromLetters || shelf.toLetters ? ' &middot; ' + esc((shelf.fromLetters || '…') + ' – ' + (shelf.toLetters || '…')) : ''}</p>
         <p class="hint">${books.length ? plural(books.length, 'book') : 'Nothing filed here yet'}${shelf.lastFiledAt ? ' &middot; last filed ' + esc(fmtDateFull(shelf.lastFiledAt)) : ''}
           ${shelfCardStale(shelf) ? ' &middot; <strong class="danger">the printed card is out of date</strong>' : ''}</p>
@@ -156,7 +157,7 @@ function shelfPageHTML(shelf) {
       <thead><tr><th>In shelf order</th><th>Genre</th><th>Status</th><th></th></tr></thead>
       <tbody>${books.map(i => {
         const loan = activeLoanForItem(i.id);
-        const stray = shelf.genre && i.genre && normName(i.genre) !== normName(shelf.genre);
+        const stray = shelfGenres(shelf).length && i.genre && !shelfHoldsGenre(shelf, i.genre);
         return `<tr class="${stray ? 'row-problem' : ''}">
           <td><span class="mono small muted">${esc(callLetters(i.title))}</span>
               <button class="link strong" data-act="desk-item" data-id="${i.id}">${esc(i.title)}</button>
@@ -210,7 +211,7 @@ function shelvingSessionHTML(shelf) {
     <div class="shelf-head">
       <div>
         <h2 class="shelf-code">${esc(shelf.code)}</h2>
-        <p class="item-sub">${esc(shelf.name || '')}${shelf.genre ? (shelf.name ? ' &middot; ' : '') + esc(shelf.genre) : ''}</p>
+        <p class="item-sub">${esc(shelf.name || '')}${shelfGenres(shelf).length ? (shelf.name ? ' &middot; ' : '') + esc(shelfGenreText(shelf)) : ''}</p>
       </div>
       <div class="shelf-tally">
         <div><strong>${shelving.scanned.length}</strong><span>scanned</span></div>
@@ -227,6 +228,7 @@ function shelvingSessionHTML(shelf) {
       <p class="hint">${shelving.mode === 'read'
         ? 'Each scan is filed here and checked against the one before it, so a book out of order gets flagged.'
         : 'Every scan files the book here.'} ${shelving.muted ? 'Sound is off.' : 'A buzz means look at the screen.'}</p>
+      ${camButtonHTML('scan-shelf', 'Scan with the camera')}
     </div>
 
     <div class="actions">
@@ -259,15 +261,15 @@ function shelveScan(code) {
   const shelf = shelfById(shelving.shelfId);
   if (!shelf) return;
   /* Scanning files the book, so it needs the same permission as any other filing. */
-  if (!Auth.can('shelve')) { toast(Auth.refusal('shelf-read'), 'error'); return; }
+  if (!Auth.can('shelve')) { toast(Auth.refusal('shelf-read'), 'error'); return { error: Auth.refusal('shelf-read') }; }
 
   // A second shelf card means "I have moved on to the next shelf".
   const asShelf = findShelfByScan(code);
   if (asShelf) {
-    if (asShelf.id === shelf.id) { Chime.ok(); return; }
+    if (asShelf.id === shelf.id) { Chime.ok(); return 'Still on ' + shelf.code + '.'; }
     ACTIONS['shelf-open'](asShelf.id);
     toast('Now filing ' + asShelf.code + '.', 'info');
-    return;
+    return 'Now filing ' + asShelf.code + '.';
   }
 
   const item = findItemByCode(code);
@@ -275,14 +277,14 @@ function shelveScan(code) {
     shelving.scanned.unshift({ code: code, item: null, issues: [{ kind: 'unknown', text: 'This barcode is not in the library.' }] });
     if (!shelving.muted) Chime.unknown();
     render();
-    return;
+    return { error: code + ' is not in the library.' };
   }
 
   const already = shelving.scanned.find(s => s.item && s.item.id === item.id);
   if (already) {
     if (!shelving.muted) Chime.problem();
     toast('"' + item.title + '" was already scanned onto this shelf.', 'error');
-    return;
+    return { error: item.title + ' was already scanned onto this shelf.' };
   }
 
   const res = fileToShelf(item.id, shelf.id);
@@ -300,25 +302,40 @@ function shelveScan(code) {
   shelving.scanned.unshift({ code: code, item: item, issues: issues });
   if (!shelving.muted) (issues.length ? Chime.problem() : Chime.ok());
   render();
+  return issues.length ? { error: item.title + ' — ' + issues[0].text } : item.title;
 }
 
 /* ------------------------------- the dialogs ------------------------------- */
 
 function openShelfModal(shelfId) {
   const shelf = shelfId ? shelfById(shelfId) : null;
-  const d = shelf || { code: '', name: '', genre: '', fromLetters: '', toLetters: '' };
+  const d = shelf || { code: '', name: '', genres: [], fromLetters: '', toLetters: '' };
+  const holds = shelfGenres(d);
+  // A shelf can hold a genre that is no longer on the list — renamed on another
+  // device, or deleted since. Show it anyway, ticked, so that saving the shelf
+  // does not quietly throw it away the way an unticked box would.
+  const offer = genreList().slice();
+  holds.forEach(g => { if (!offer.some(h => normName(h) === normName(g))) offer.push(g); });
   openModal(shelf ? 'Shelf ' + shelf.code : 'Add a shelf', `
     <div class="grid-2">
       ${field('Code *', 'code', d.code, { placeholder: 'A3' })}
       ${field('Where it is', 'name', d.name, { placeholder: 'Bookcase A, third shelf' })}
     </div>
-    <label class="field"><span>Genre on this shelf</span>
-      <select name="genre">${genreOptionsHTML(d.genre)}</select></label>
+    <div class="field">
+      <span class="field-label">Genres on this shelf</span>
+      <div class="shelf-genres">${offer.map(g => `
+        <label class="tick">
+          <input type="checkbox" class="shelf-genre" value="${esc(g)}"
+            ${holds.some(h => normName(h) === normName(g)) ? 'checked' : ''}>
+          <span>${genreArt(g, 14)} ${esc(g)}</span>
+        </label>`).join('')}</div>
+    </div>
     <div class="grid-2">
       ${field('Letters from', 'fromLetters', d.fromLetters, { placeholder: 'ADA' })}
       ${field('up to', 'toLetters', d.toLetters, { placeholder: 'KIN' })}
     </div>
-    <p class="hint">A genre can fill several shelves. The letters are optional — set them and a
+    <p class="hint">Tick as many as this shelf holds, or none to let it take anything.
+      A genre can fill several shelves too. The letters are optional — set them and a
       book that sorts outside the range gets flagged when you file it.</p>
     <div class="actions">
       <button type="button" class="btn btn-primary" id="save-shelf">${shelf ? 'Save' : 'Add it'}</button>
@@ -329,7 +346,7 @@ function openShelfModal(shelfId) {
     body.querySelector('#save-shelf').addEventListener('click', () => {
       const fields = {
         code: get('code').value, name: get('name').value,
-        genre: get('genre').value === '__new__' ? '' : get('genre').value,
+        genres: Array.from(body.querySelectorAll('.shelf-genre:checked')).map(b => b.value),
         fromLetters: get('fromLetters').value, toLetters: get('toLetters').value
       };
       const res = shelf ? updateShelf(shelf.id, fields) : addShelf(fields);
@@ -367,11 +384,11 @@ function shelfCardHTML(shelf) {
   return `<div class="shelf-card">
     <span class="sc-code">${esc(shelf.code)}</span>
     <span class="sc-mid">
-      <span class="sc-genre">${esc(shelf.genre || 'Any genre')}</span>
+      <span class="sc-genre">${esc(shelfGenreText(shelf, 'Any genre'))}</span>
       <span class="sc-where">${esc(shelf.name || '')}</span>
       ${shelf.fromLetters || shelf.toLetters ? `<span class="sc-where mono">${esc((shelf.fromLetters || '…') + ' – ' + (shelf.toLetters || '…'))}</span>` : ''}
     </span>
-    <span class="sc-art">${genreArt(shelf.genre, '0.34in')}</span>
+    <span class="sc-art">${shelfGenres(shelf).slice(0, 3).map(g => genreArt(g, '0.34in')).join('')}</span>
     <span class="sc-code39">${code39SVG(shelfBarcode(shelf))}</span>
   </div>`;
 }
@@ -386,12 +403,42 @@ Object.assign(NEEDS, {
   'shelf-new': 'setup', 'shelf-edit': 'setup', 'shelf-delete': 'setup',
   'shelf-move': 'setup', 'shelf-split': 'setup',
   'shelf-read': 'shelve', 'shelf-finish': 'shelve',
+  'scan-shelf': 'shelve', 'scan-shelf-card': 'shelve',
   'shelf-add-book': 'catalog',
   'shelf-print': 'print', 'shelf-print-one': 'print',
   'shelf-print-list': 'print', 'shelf-print-stale': 'print'
 });
 
 Object.assign(ACTIONS, {
+  /* Walking the shelves with a phone: the camera stays open and every book
+     scanned is filed where it stands, so a whole shelf is read in one pass
+     without putting the phone down. What each scan did is said in the
+     viewfinder, because the list behind it cannot be seen while scanning. */
+  'scan-shelf': async () => {
+    const shelf = shelfById(shelving.shelfId);
+    if (!shelf) return;
+    await Scan.open({
+      title: 'Shelf ' + shelf.code,
+      hint: shelving.mode === 'read' ? 'Scan the books left to right, as they sit.' : 'Scan each book on the shelf.',
+      onCode: shelveScan
+    });
+    render();
+  },
+
+  'scan-shelf-card': async () => {
+    await Scan.open({
+      title: 'Scan a shelf card',
+      hint: 'The card stuck to the front of the shelf.',
+      once: true,
+      onCode: code => {
+        const shelf = findShelfByScan(code);
+        if (!shelf) return null;                     // a book, not a shelf: keep looking
+        ACTIONS['shelf-open'](shelf.id);
+        return 'Shelf ' + shelf.code;
+      }
+    });
+  },
+
   'shelf-new': () => openShelfModal(null),
   'shelf-edit': id => openShelfModal(id),
   'shelf-delete': id => {
@@ -444,11 +491,11 @@ Object.assign(ACTIONS, {
     const books = shelfContents(id);
     printHTML(`<section class="notice">
       <h1>${esc(S().libraryName)}</h1>
-      <h2>Shelf ${esc(shelf.code)}${shelf.genre ? ' — ' + esc(shelf.genre) : ''} &middot; ${plural(books.length, 'book')}</h2>
+      <h2>Shelf ${esc(shelf.code)}${shelfGenres(shelf).length ? ' — ' + esc(shelfGenreText(shelf)) : ''} &middot; ${plural(books.length, 'book')}</h2>
       <table><thead><tr><th>✓</th><th>Letters</th><th>Title</th><th>Barcode</th><th>Where it should be</th></tr></thead>
       <tbody>${books.map(i => {
         const loan = activeLoanForItem(i.id);
-        const stray = shelf.genre && i.genre && normName(i.genre) !== normName(shelf.genre);
+        const stray = shelfGenres(shelf).length && i.genre && !shelfHoldsGenre(shelf, i.genre);
         return `<tr><td>☐</td><td>${esc(callLetters(i.title))}</td><td>${esc(i.title)}</td><td>${esc(i.barcode)}</td>
           <td>${stray ? esc(i.genre) : loan ? 'out on loan' : i.status ? esc(statusLabel(i.status)) : 'here'}</td></tr>`;
       }).join('')}</tbody></table>
@@ -463,7 +510,7 @@ Object.assign(ACTIONS, {
       <ul class="mini-list">${strays.map(i => {
         const shelf = shelfById(i.shelfId);
         return `<li><span>${esc(i.title)}</span>
-          <span class="muted small">on ${esc(shelf.code)} (${esc(shelf.genre)}) &middot; belongs in ${esc(i.genre)}</span></li>`;
+          <span class="muted small">on ${esc(shelf.code)} (${esc(shelfGenreText(shelf))}) &middot; belongs in ${esc(i.genre)}</span></li>`;
       }).join('')}</ul>
       <div class="actions"><button type="button" class="btn btn-quiet" data-close>Close</button></div>`);
   },
@@ -480,7 +527,7 @@ Object.assign(ACTIONS, {
     openModal('Move everything off ' + from.code, `
       <p>${plural(itemsOnShelf(id).length, 'book')} will be recorded as living on the shelf you pick. ${esc(from.code)} itself stays.</p>
       <label class="field"><span>Move to</span>
-        <select name="to">${others.map(s => `<option value="${s.id}">${esc(s.code)}${s.genre ? ' — ' + esc(s.genre) : ''}</option>`).join('')}</select></label>
+        <select name="to">${others.map(s => `<option value="${s.id}">${esc(s.code)}${shelfGenres(s).length ? ' — ' + esc(shelfGenreText(s)) : ''}</option>`).join('')}</select></label>
       <div class="actions">
         <button type="button" class="btn btn-primary" id="do-move">Move them</button>
         <button type="button" class="btn btn-quiet" data-close>Cancel</button>

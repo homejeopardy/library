@@ -81,6 +81,9 @@ const NEEDS = {
   'attention-set': 'catalog', 'attention-clear': 'catalog', 'unmark': 'catalog',
   'request-done': 'catalog',
 
+  'scan-desk': 'circulate',
+  'scan-isbn': 'catalog', 'scan-barcode': 'catalog',
+
   'print-labels': 'print', 'print-notices': 'print', 'print-shelflist': 'print',
   'pick-labels': 'print', 'unmark-labelled': 'print',
 
@@ -746,6 +749,7 @@ VIEWS.circulation = function () {
       <p class="hint">
         <button class="link" data-act="returns-box">${circ.returnsBox ? 'Leave the returns box' : 'Emptying the returns box?'}</button>
       </p>
+      ${camButtonHTML('scan-desk', 'Scan with the camera')}
       <p id="scan-hint" class="hint">
         ${DB.items.length ? plural(DB.items.length, 'book') + ' in the collection &middot; ' + out + ' out' + (over ? ' &middot; <strong class="danger">' + over + ' overdue</strong>' : '') : 'No books yet — scan an ISBN or <a href="#" data-act="new-item">add one by hand</a>.'}
       </p>
@@ -1026,6 +1030,108 @@ function returnsBoxScan(code) {
   render();
 }
 
+/* ---------------------------------------------------------------
+   Scanning with the camera.
+
+   The button is written into the page always and hidden by the
+   stylesheet unless js/scan.js has found a camera on the back of the
+   device, so the laptop at the desk never offers one.
+   --------------------------------------------------------------- */
+
+function camButtonHTML(act, label, id) {
+  return `<button type="button" class="btn scan-cam" data-act="${act}"${id ? ` data-id="${esc(id)}"` : ''}>
+    <span class="scan-cam-lens" aria-hidden="true"></span>${esc(label)}</button>`;
+}
+
+/* The desk, read through a camera, does the obvious thing with each barcode
+   rather than selecting it and waiting for a tap: the phone is held over the
+   book and the screen is the viewfinder, so there is nothing to tap. A student
+   card sets who is borrowing and sticks until another one is scanned; a book
+   that is out goes back; a book that is in goes out to whoever was last
+   scanned. Anything it will not do, it says and does not do. */
+let scanDeskPatron = null;
+
+function scanDeskCode(code) {
+  const shelf = typeof findShelfByScan === 'function' ? findShelfByScan(code) : null;
+  if (shelf) return { error: 'That is shelf ' + shelf.code + ' — use Shelves to file books.' };
+
+  const patron = findPatronByCode(code);
+  if (patron) {
+    scanDeskPatron = patron;
+    return patron.name + ' — now scan their books.';
+  }
+
+  const item = findItemByCode(code);
+  if (!item) {
+    return { error: looksLikeISBN(code) ? 'No book here with ISBN ' + code + '.' : 'Nothing in the library is ' + code + '.' };
+  }
+
+  const loan = activeLoanForItem(item.id);
+  if (loan) {
+    const who = patronById(loan.patronId);
+    const res = checkin(item.id);
+    if (!res.ok) return { error: res.error };
+    render();
+    const held = res.nextHold ? patronById(res.nextHold.patronId) : null;
+    const where = item.shelfId && shelfById(item.shelfId) ? ' → ' + shelfById(item.shelfId).code : '';
+    return 'In: ' + item.title + (who ? ' (was with ' + who.name + ')' : '') +
+      (held ? ' — hold for ' + (held ? held.name : 'someone') : where);
+  }
+
+  if (!scanDeskPatron) return { error: item.title + ' is already in. Scan a student first to lend it.' };
+  const res = checkout(item.id, scanDeskPatron.id);
+  if (!res.ok) return { error: res.error };
+  render();
+  return 'Out: ' + item.title + ' → ' + scanDeskPatron.name;
+}
+
+ACTIONS['scan-desk'] = async () => {
+  scanDeskPatron = null;
+  await Scan.open({
+    title: 'Check books in and out',
+    hint: 'Scan a student’s card, then their books. A book that is out goes back in.',
+    onCode: scanDeskCode
+  });
+  render();
+};
+
+/* Filling one field and closing again: the ISBN on the back of a book, or the
+   spine label being given to it. */
+function scanIntoField(name, opts) {
+  const input = document.querySelector('[name="' + name + '"]');
+  if (!input) return Promise.resolve();
+  return Scan.open({
+    title: opts.title,
+    hint: opts.hint,
+    once: true,
+    onCode: code => {
+      if (opts.want && !opts.want(code)) return null;      // keep looking
+      const message = opts.said(code);
+      if (message && message.error) return message;        // refused: leave the field alone
+      input.value = code;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return message;
+    }
+  });
+}
+
+ACTIONS['scan-isbn'] = () => scanIntoField('isbn', {
+  title: 'Scan the ISBN',
+  hint: 'The barcode on the back of the book.',
+  want: looksLikeISBN,
+  said: code => 'ISBN ' + code
+});
+
+ACTIONS['scan-barcode'] = () => scanIntoField('barcode', {
+  title: 'Scan the spine label',
+  hint: 'The label on the spine, not the one printed on the book.',
+  said: code => {
+    const clash = findItemByCode(code);
+    return clash ? { error: code + ' is already on “' + clash.title + '”.' } : code;
+  }
+});
+
 /* --- student autocomplete --- */
 function wirePatronAutocomplete(input) {
   const list = document.getElementById('patron-list');
@@ -1137,12 +1243,16 @@ function openItemModal(itemId, prefillISBN, prefillTitle) {
   openModal(item ? 'Edit book' : 'Add a book', `
     <div class="lookup-row">
       ${field('ISBN', 'isbn', d.isbn, { placeholder: 'Scan or type the ISBN' })}
+      ${camButtonHTML('scan-isbn', 'Scan')}
       <button type="button" class="btn" id="do-lookup">Look up</button>
     </div>
     <p class="hint" id="lookup-status">${item ? 'Looking up an ISBN fills in any empty details.'
       : 'Scan the ISBN, then the barcode label, then pick a genre and press Enter. The details fill in while you scan.'}</p>
     <div class="grid-2 scan-fields">
-      ${field('Barcode', 'barcode', d.barcode, { placeholder: 'Scan the label, or leave blank for ' + (S().barcodePrefix || 'CL') + '-####' })}
+      <div class="field-cam">
+        ${field('Barcode', 'barcode', d.barcode, { placeholder: 'Scan the label, or leave blank for ' + (S().barcodePrefix || 'CL') + '-####' })}
+        ${camButtonHTML('scan-barcode', 'Scan')}
+      </div>
       <div class="field">
         <label><span class="field-label">Genre</span>
           <span class="genre-pick"><select name="genre">${genreOptionsHTML(d.genre)}</select><span class="genre-pick-art" id="genre-art-now">${genreArt(d.genre, 20)}</span></span></label>
@@ -1526,7 +1636,7 @@ VIEWS.catalog = function () {
       <input id="catalog-q" class="search" placeholder="Search title, author, genre, tag or barcode" value="${esc(ui.catalogQuery)}" autocomplete="off">
       ${shelvesList().length ? `<select id="catalog-shelf" class="select" aria-label="Shelf">
         <option value="">All shelves</option>
-        ${shelvesList().map(s => `<option value="${s.id}" ${s.id === ui.catalogShelf ? 'selected' : ''}>${esc(s.code)}${s.genre ? ' — ' + esc(s.genre) : ''} (${itemsOnShelf(s.id).length})</option>`).join('')}
+        ${shelvesList().map(s => `<option value="${s.id}" ${s.id === ui.catalogShelf ? 'selected' : ''}>${esc(s.code)}${shelfGenres(s).length ? ' — ' + esc(shelfGenreText(s)) : ''} (${itemsOnShelf(s.id).length})</option>`).join('')}
         ${DB.items.some(i => !i.shelfId) ? `<option value="__none__" ${ui.catalogShelf === '__none__' ? 'selected' : ''}>Not on a shelf (${DB.items.filter(i => !i.shelfId).length})</option>` : ''}
       </select>` : ''}
       <select id="catalog-genre" class="select" aria-label="Genre">
@@ -2168,7 +2278,7 @@ Object.assign(ACTIONS, {
   'pick-shelf': () => bulkChange('Put ' + plural(ui.picked.size, 'book') + ' on a shelf',
     `<label class="field"><span>Shelf</span><select name="value">
        <option value="">— no shelf —</option>
-       ${shelvesList().map(s => `<option value="${s.id}">${esc(s.code)}${s.genre ? ' — ' + esc(s.genre) : ''}</option>`).join('')}
+       ${shelvesList().map(s => `<option value="${s.id}">${esc(s.code)}${shelfGenres(s).length ? ' — ' + esc(shelfGenreText(s)) : ''}</option>`).join('')}
      </select></label>`,
     (item, value) => value ? fileToShelf(item.id, value) : (delete item.shelfId, saveDB(), { ok: true })),
   'pick-condition': () => bulkChange('Set the condition of ' + plural(ui.picked.size, 'book'),
@@ -2738,6 +2848,11 @@ function loadSampleData() {
 
 render();
 if (route === 'circulation') focusScan();
+
+/* Settle whether this device has a camera on its back. The answer arrives a
+   moment after the first view is drawn and only flips a stylesheet switch, so
+   nothing has to be rendered twice to wait for it. */
+Scan.announce();
 
 /* Opened from a pairing link: set this computer up without anyone typing. */
 if (!Sync.configured() && Sync.handedOver()) connectWithKey(Sync.handedOver());

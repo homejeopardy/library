@@ -88,6 +88,15 @@ function migrate(parsed) {
     delete item.location;
   });
 
+  // A shelf used to hold exactly one genre. It now holds a list, so the single
+  // one becomes a list of one. The old field is dropped only here; shelfGenres
+  // still reads it, because a device on an older copy can sync one back.
+  db.shelves.forEach(shelf => {
+    if (Array.isArray(shelf.genres)) { delete shelf.genre; return; }
+    shelf.genres = shelf.genre ? [String(shelf.genre).trim()] : [];
+    delete shelf.genre;
+  });
+
   if (((parsed.settings && parsed.settings.genreSet) || 1) < 2) {
     const target = DEFAULT_SETTINGS.genres;
     db.items.forEach(item => {
@@ -500,12 +509,47 @@ function readyHolds() {
 }
 
 /* ------------------------------ shelves ------------------------------
-   A shelf is a physical place that holds one genre — a genre may fill
-   several. Books record which shelf they are on, so a book can be found
-   even when it has wandered from where its genre says it should be.
+   A shelf is a physical place that holds one or more genres, and a genre
+   may fill several shelves — the two do not line up, which is the whole
+   reason shelves are recorded separately from genres. Books record which
+   shelf they are on, so a book can be found even when it has wandered
+   from where its genre says it should be.
    --------------------------------------------------------------------- */
 
 const SHELF_BARCODE_PREFIX = 'SHELF-';
+
+/* Shelves kept a single `genre` until a shelf was allowed to hold more than
+   one. Both shapes are read here rather than assumed away: a device still
+   running the older copy of the app can sync a one-genre shelf back at any
+   time, and it should not come through as a shelf that holds nothing. */
+function shelfGenres(shelf) {
+  if (!shelf) return [];
+  if (Array.isArray(shelf.genres)) return shelf.genres.filter(Boolean);
+  return shelf.genre ? [shelf.genre] : [];
+}
+
+/* Trims, drops blanks and duplicates, and keeps the order they were picked. */
+function cleanGenres(value) {
+  const list = Array.isArray(value) ? value : (value ? [value] : []);
+  const out = [];
+  list.forEach(g => {
+    const clean = String(g || '').trim();
+    if (clean && !out.some(h => normName(h) === normName(clean))) out.push(clean);
+  });
+  return out;
+}
+
+const shelfHoldsGenre = (shelf, genre) =>
+  shelfGenres(shelf).some(g => normName(g) === normName(genre));
+
+/* The shelf's genres as a phrase: "Biography", or "Biography and Nonfiction",
+   or "Biography, Nonfiction and Plays & Poems". */
+function shelfGenreText(shelf, empty) {
+  const list = shelfGenres(shelf);
+  if (!list.length) return empty || '';
+  if (list.length === 1) return list[0];
+  return list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+}
 
 const shelvesList = () => DB.shelves.slice().sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
 const shelfById = id => DB.shelves.find(s => s.id === id) || null;
@@ -529,7 +573,7 @@ function addShelf(fields) {
   const shelf = {
     id: uid('shf'), code: code,
     name: String(fields.name || '').trim(),
-    genre: String(fields.genre || '').trim(),
+    genres: cleanGenres(fields.genres != null ? fields.genres : fields.genre),
     fromLetters: String(fields.fromLetters || '').trim().toUpperCase(),
     toLetters: String(fields.toLetters || '').trim().toUpperCase(),
     createdAt: nowISO()
@@ -541,7 +585,7 @@ function addShelf(fields) {
 
 /* What a printed shelf card shows. Changing any of it makes the card on the
    shelf wrong, which is worth knowing. */
-const CARD_FIELDS = ['code', 'name', 'genre', 'fromLetters', 'toLetters'];
+const CARD_FIELDS = ['code', 'name', 'genres', 'fromLetters', 'toLetters'];
 
 const shelfCardStale = shelf => !!shelf.cardPrintedAt && !!shelf.changedAt && shelf.changedAt > shelf.cardPrintedAt;
 
@@ -562,8 +606,14 @@ function updateShelf(id, fields) {
     fields.code = code;
   }
   ['fromLetters', 'toLetters'].forEach(k => { if (fields[k] != null) fields[k] = String(fields[k]).trim().toUpperCase(); });
-  const changedCard = CARD_FIELDS.some(k => fields[k] != null && String(fields[k]) !== String(shelf[k] || ''));
+  if (fields.genres != null || fields.genre != null) {
+    fields.genres = cleanGenres(fields.genres != null ? fields.genres : fields.genre);
+    delete fields.genre;              // the old single-genre field never comes back
+  }
+  const asText = v => (Array.isArray(v) ? v.join(' / ') : String(v || ''));
+  const changedCard = CARD_FIELDS.some(k => fields[k] != null && asText(fields[k]) !== asText(shelf[k]));
   Object.assign(shelf, fields);
+  if (fields.genres != null) delete shelf.genre;
   if (changedCard) shelf.changedAt = nowISO();
   saveDB();
   return { ok: true, shelf: shelf, cardNowWrong: changedCard && !!shelf.cardPrintedAt };
@@ -586,10 +636,11 @@ function shelvingIssues(item, shelf) {
     issues.push({ kind: 'out', text: 'Checked out to ' + (who ? who.name : 'someone') + ' — the app thought it was away.' });
   }
   if (item.status) issues.push({ kind: 'status', text: 'Marked ' + statusLabel(item.status).toLowerCase() + ' — it turned up after all.' });
-  if (shelf.genre && item.genre && normName(item.genre) !== normName(shelf.genre)) {
-    issues.push({ kind: 'genre', text: 'This is ' + item.genre + ', not ' + shelf.genre + '.' });
+  const holds = shelfGenres(shelf);
+  if (holds.length && item.genre && !shelfHoldsGenre(shelf, item.genre)) {
+    issues.push({ kind: 'genre', text: 'This is ' + item.genre + ', not ' + shelfGenreText(shelf) + '.' });
   }
-  if (shelf.genre && !item.genre) issues.push({ kind: 'nogenre', text: 'No genre set.' });
+  if (holds.length && !item.genre) issues.push({ kind: 'nogenre', text: 'No genre set.' });
   const letters = callLetters(item.title);
   if (shelf.fromLetters && letters && letters < shelf.fromLetters) {
     issues.push({ kind: 'range', text: letters + ' sorts before this shelf\'s ' + shelf.fromLetters + '.' });
@@ -613,12 +664,13 @@ function fileToShelf(itemId, shelfId) {
   return { ok: true, item: item, shelf: shelf, movedFrom: moved, issues: shelvingIssues(item, shelf) };
 }
 
-/* Books sitting on a shelf that holds a different genre. */
+/* Books sitting on a shelf that does not hold their genre. A shelf holding
+   several is wrong only if the book matches none of them. */
 function strayItems() {
   return DB.items.filter(i => {
     if (!i.shelfId || !i.genre) return false;
     const shelf = shelfById(i.shelfId);
-    return shelf && shelf.genre && normName(shelf.genre) !== normName(i.genre);
+    return shelf && shelfGenres(shelf).length && !shelfHoldsGenre(shelf, i.genre);
   });
 }
 
@@ -649,7 +701,7 @@ function splitShelf(id, letter, newCode, newName) {
   if (!shelf) return { ok: false, error: 'Shelf not found.' };
   const cut = String(letter || '').trim().toUpperCase();
   if (!cut) return { ok: false, error: 'Say which letters move, e.g. LET.' };
-  const made = addShelf({ code: newCode, name: newName, genre: shelf.genre, fromLetters: cut, toLetters: shelf.toLetters });
+  const made = addShelf({ code: newCode, name: newName, genres: shelfGenres(shelf), fromLetters: cut, toLetters: shelf.toLetters });
   if (!made.ok) return made;
   const moving = shelfContents(id).filter(i => callLetters(i.title) >= cut);
   moving.forEach(i => { i.shelfId = made.shelf.id; i.shelvedAt = nowISO(); });
@@ -846,6 +898,13 @@ function renameGenre(from, to) {
   if (!clean) return { ok: false, error: 'Genre name cannot be blank.' };
   const target = S().genres.find(g => normName(g) === normName(clean) && normName(g) !== normName(from)) || clean;
   booksInGenre(from).forEach(i => { i.genre = target; });
+  // Shelves name their genres too, so a rename has to reach them or a shelf is
+  // left holding a genre that no longer exists and every book on it is a stray.
+  DB.shelves.forEach(shelf => {
+    if (!shelfHoldsGenre(shelf, from)) return;
+    shelf.genres = cleanGenres(shelfGenres(shelf).map(g => normName(g) === normName(from) ? target : g));
+    delete shelf.genre;
+  });
   S().genres = S().genres.filter(g => normName(g) !== normName(from));
   if (!S().genres.some(g => normName(g) === normName(target))) S().genres.push(target);
   saveDB();
@@ -854,6 +913,11 @@ function renameGenre(from, to) {
 
 function deleteGenre(name) {
   booksInGenre(name).forEach(i => { i.genre = ''; });
+  DB.shelves.forEach(shelf => {
+    if (!shelfHoldsGenre(shelf, name)) return;
+    shelf.genres = shelfGenres(shelf).filter(g => normName(g) !== normName(name));
+    delete shelf.genre;
+  });
   S().genres = S().genres.filter(g => normName(g) !== normName(name));
   saveDB();
   return { ok: true };
