@@ -524,6 +524,8 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .tile strong { font-size: 26px; font-weight: 650; letter-spacing: -.02em; }
 .tile span { font-size: 12px; color: var(--text-muted); }
 .tile.danger strong { color: var(--danger); }
+/* Something to tidy rather than something wrong: amber, not red. */
+.tile.warn strong { color: var(--warn); }
 
 .rank { margin: 0; padding-left: 20px; }
 .rank li { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--border); }
@@ -781,6 +783,12 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .card-sheet-index { grid-template-columns: repeat(1, 5in); }
 .card-sheet-sticker { grid-template-columns: repeat(3, 2.625in); }
 
+/* One title whose copies disagree: the name on the left, every genre in play
+   on the right as a button that settles it. */
+.disagree li { flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 16px; }
+.disagree-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.disagree-pick .btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; font-size: 13px; }
+
 .label-preview { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
 .preset-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
 .label-sheet { display: grid; grid-template-columns: repeat(11, 0.66in); }
@@ -919,14 +927,20 @@ html[data-camera="yes"] .scan-cam { display: inline-flex; align-items: center; g
   padding: 0;
   text-align: center;
 }
+/* An answer can run to several lines — "out to Marcus Bell, due Friday, lives
+   on B1" — so the pill becomes a rounded block rather than wrapping text round
+   a shape meant for one line. */
 .cam-line {
   display: inline-block;
   max-width: 100%;
   margin: 3px 0;
   padding: 8px 14px;
-  border-radius: 999px;
+  border-radius: 14px;
   background: rgba(0,0,0,.72);
   font-size: 15px;
+  text-align: left;
+  white-space: pre-line;
+  line-height: 1.35;
 }
 .cam-line + .cam-line { opacity: .55; font-size: 13px; }
 .cam-good { background: rgba(31,107,69,.92); }

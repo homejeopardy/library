@@ -1096,6 +1096,68 @@ ACTIONS['scan-desk'] = async () => {
   render();
 };
 
+/* Point the camera at something and simply be told what it is. Every other
+   scan at the desk does something — checks a book out, files it on a shelf —
+   and there was no way to ask a question without also answering it. This is
+   the one that gets used standing in front of the shelves with a book in hand
+   and a child waiting: where does it live, who has it, when is it back.
+
+   It is deliberately not in the permission table. Looking something up changes
+   nothing, and anyone allowed to open the library at all may read it. */
+function scanLookup(code) {
+  const shelf = typeof findShelfByScan === 'function' ? findShelfByScan(code) : null;
+  if (shelf) {
+    const on = itemsOnShelf(shelf.id).length;
+    return 'Shelf ' + shelf.code + (shelf.name ? ' — ' + shelf.name : '') + '\n' +
+      (shelfGenres(shelf).length ? shelfGenreText(shelf) + ' · ' : '') + plural(on, 'book') + ' filed here';
+  }
+
+  const patron = findPatronByCode(code);
+  if (patron) {
+    const out = activeLoansForPatron(patron.id);
+    const late = out.filter(isOverdue);
+    return patron.name + (patron.group ? ' · ' + patron.group : '') + '\n' +
+      (out.length ? plural(out.length, 'book') + ' out' + (late.length ? ', ' + late.length + ' overdue' : '') +
+        '\n' + out.map(l => (itemById(l.itemId) || {}).title).filter(Boolean).join(', ')
+        : 'Nothing out at the moment');
+  }
+
+  const item = findItemByCode(code);
+  if (!item) {
+    return { error: looksLikeISBN(code) ? 'No book here with ISBN ' + code + '.' : 'Nothing in the library is ' + code + '.' };
+  }
+
+  const lines = [item.title + (item.author ? ' — ' + item.author : '')];
+  const loan = activeLoanForItem(item.id);
+  const home = item.shelfId ? shelfById(item.shelfId) : null;
+  if (item.status) lines.push('Marked ' + statusLabel(item.status).toLowerCase() +
+    (item.statusWith ? ', last with ' + item.statusWith : ''));
+  else if (loan) {
+    const who = patronById(loan.patronId);
+    lines.push((isOverdue(loan) ? 'OVERDUE — out to ' : 'Out to ') + (who ? who.name : 'someone') +
+      ', due ' + fmtDate(loan.dueAt));
+  } else {
+    lines.push('On the shelf');
+  }
+  const where = [];
+  if (home) where.push('Lives on ' + home.code + (home.name ? ' (' + home.name + ')' : ''));
+  else where.push('Not on a shelf');
+  if (item.genre) where.push(item.genre);
+  lines.push(where.join(' · '));
+  const waiting = holdsForItem(item.id).length;
+  if (waiting) lines.push(plural(waiting, 'student is', 'students are') + ' waiting for it');
+  if (item.attention && !item.status) lines.push('Needs attention: ' + (item.attentionNote || 'flagged'));
+  return lines.join('\n');
+}
+
+ACTIONS['scan-lookup'] = async () => {
+  await Scan.open({
+    title: 'What is this?',
+    hint: 'A book, a shelf card or a student’s card. Nothing is changed.',
+    onCode: scanLookup
+  });
+};
+
 /* Filling one field and closing again: the ISBN on the back of a book, or the
    spine label being given to it. */
 function scanIntoField(name, opts) {
@@ -1651,6 +1713,7 @@ VIEWS.catalog = function () {
       </div>
       <span class="spacer"></span>
       <button class="btn btn-primary" data-act="new-item">Add a book</button>
+      ${camButtonHTML('scan-lookup', 'What is this?')}
       <button class="btn btn-quiet" data-act="print-labels">Print labels</button>
       ${lastLabelled.length ? `<button class="btn btn-quiet" data-act="unmark-labelled">Undo “marked as labelled”</button>` : ''}
       <button class="btn btn-quiet" data-act="print-shelflist">Print list</button>
@@ -1865,7 +1928,11 @@ VIEWS.reports = function () {
       ${tile(openHolds().length, 'open holds')}
       ${tile(troubledItems().length, 'lost or damaged', troubledItems().length ? 'danger' : '')}
       ${tile(attentionItems().length, 'need attention')}
+      ${tile(genreDisagreements().length, 'titles filed two ways', genreDisagreements().length ? 'warn' : '')}
     </div>
+    ${genreDisagreements().length ? `<div class="actions">
+      <button class="btn btn-quiet" data-act="genre-disagree">Settle the ${genreDisagreements().length} filed two ways</button>
+    </div>` : ''}
 
     <h2 class="section-title">Overdue <button class="btn btn-quiet" data-act="print-notices" ${over.length ? '' : 'disabled'}>Print notices</button></h2>
     ${over.length ? `<table class="table">
@@ -2604,6 +2671,57 @@ const LABEL_ORDERS = [
   ['author', 'Author, then title',
     (a, b) => normName(a.author || '~').localeCompare(normName(b.author || '~')) || byTitle(a, b)]
 ];
+
+/* ---------------------------------------------------------------
+   Copies of one book filed under two different genres.
+
+   The fix is one click per title, because the answer is nearly always
+   "whichever most of them say" — and where it isn't, the teacher is the
+   one who knows, so every genre in play is offered rather than guessed.
+   --------------------------------------------------------------- */
+
+ACTIONS['genre-disagree'] = () => {
+  // Buttons inside a dialog are wired here rather than through data-act: the
+  // delegated click handler listens on the view, and the dialog is not in it.
+  const mayFix = Auth.can('catalog');
+
+  function draw() {
+    const groups = genreDisagreements();
+    openModal('Titles filed two ways', groups.length ? `
+      <p>${plural(groups.length, 'title has', 'titles have')} copies under more than one genre.
+        ${mayFix ? 'Pick the one they should all be.' : ''}</p>
+      <ul class="mini-list disagree">
+        ${groups.map((g, n) => `<li>
+          <div>
+            <strong>${esc(g.title)}</strong>${g.author ? ` <span class="muted">${esc(g.author)}</span>` : ''}
+            <div class="small muted">${plural(g.copies.length, 'copy', 'copies')} &middot; ${esc(g.copies.map(c => c.barcode).join(', '))}</div>
+          </div>
+          <div class="disagree-pick">
+            ${g.genres.map(x => mayFix
+              ? `<button type="button" class="btn agree" data-group="${n}" data-genre="${esc(x.genre)}">
+                   ${genreArt(x.genre, 13)} ${esc(x.genre)} <span class="muted">(${x.count})</span></button>`
+              : `<span class="genre-tag">${genreArt(x.genre, 13)}${esc(x.genre)} (${x.count})</span>`).join('')}
+          </div>
+        </li>`).join('')}
+      </ul>
+      <div class="actions"><button type="button" class="btn btn-quiet" data-close>Close</button></div>
+    ` : `
+      <p>Nothing disagrees — every title with more than one copy has them all under the same genre.</p>
+      <div class="actions"><button type="button" class="btn btn-quiet" data-close>Close</button></div>
+    `, body => {
+      body.querySelectorAll('.agree').forEach(btn => btn.addEventListener('click', () => {
+        const group = groups[Number(btn.dataset.group)];
+        if (!group) return;
+        const res = agreeGenre(group.copies.map(c => c.id), btn.dataset.genre);
+        if (!res.ok) { toast(res.error, 'error'); return; }
+        toast(plural(res.changed, 'copy', 'copies') + ' moved to ' + btn.dataset.genre + '.', 'ok');
+        render();
+        draw();                  // the list shrinks by one as each is settled
+      }));
+    });
+  }
+  draw();
+};
 
 /* ---------------------------------------------------------------
    Student library cards.

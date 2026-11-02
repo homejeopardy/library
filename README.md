@@ -257,6 +257,10 @@ class has been added and everyone else was done last year), for **one class**, o
 **everyone**. **Skip this many spaces** carries on down a part-used sheet, as with spine
 labels.
 
+At the student station, scanning a card signs that student straight in — no typing a name,
+no spelling arguments, and scanning a second card hands the station to the next student in
+the queue. The welcome screen only mentions cards once some have been printed.
+
 Card numbers run `ST-0001`, `ST-0002`, … — the prefix is **Settings → Card prefix for
 students**. They are kept clear of book barcodes and shelf codes, because the desk reads one
 box and whatever a barcode names has to be the only thing it could be.
@@ -276,6 +280,7 @@ beep, point at the next one. There are three of them:
 | **Circulation → Scan with the camera** | Scan a student's card, then their books. A book that's out goes back in; a book that's in goes out to whoever was scanned last. Each one is said on screen, so you never have to look away from the pile |
 | **Add or edit a book → Scan** | One beside ISBN for the back-cover barcode, one beside Barcode for the spine label. Each fills its field and closes. A label already on another book is refused and the field left alone |
 | **Shelves → Scan a shelf card**, and **Scan with the camera** on a shelf's page | Walk the shelves with the phone instead of carrying a laptop. Every scan files that book where it stands and says so — including "This is Graphic Novels, not Realistic Fiction" |
+| **Catalog → What is this?** | Asks rather than acts. Point it at a book and be told where it lives, who has it and when it's due; at a shelf card for what the shelf holds; at a student's card for what they have out. Nothing is changed by it, so anyone may use it |
 
 It reads the spine labels this app prints (Code 39) and the ISBN on the back of a book
 (EAN-13, and the UPC-A barcodes that amount to the same thing). Nothing else — a QR code
@@ -531,6 +536,18 @@ python3 dev/build_genre_art.py
 ```
 
 Open `dev/genre-icons.html` to see every icon at icon, tag and real label size.
+
+## Titles filed two ways
+
+A second copy arrives a year after the first, nobody remembers where the first one went,
+and the two sit under different genres for good. **Reports** counts these as **titles filed
+two ways**, and the button beside it lists each one with every genre its copies are under
+and how many are under each. One click puts them all together.
+
+Copies are matched on title and author rather than ISBN, because a paperback reissue has a
+different ISBN and still belongs on the same shelf. Books with no genre at all are left out
+— that's a different problem, counted elsewhere, and folding it in would bury the real
+disagreements.
 
 ## Lost and damaged books
 

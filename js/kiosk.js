@@ -92,10 +92,13 @@ function screenWelcome() {
   main.innerHTML = `
   <section class="k-welcome">
     <h1>Welcome to the ${esc(S().libraryName || 'library')}!</h1>
-    <p class="k-lead">Type your name to borrow a book — or scan a book to return it.</p>
+    <p class="k-lead">${DB.patrons.some(p => p.barcode)
+      ? 'Scan your library card or type your name to borrow a book — or scan a book to return it.'
+      : 'Type your name to borrow a book — or scan a book to return it.'}</p>
     <div class="k-box">
       <input id="k-input" class="k-input" autocomplete="off" spellcheck="false"
-             placeholder="Your name, or scan a book" aria-label="Your name, or scan a book"
+             placeholder="${DB.patrons.some(p => p.barcode) ? 'Your card, your name, or a book' : 'Your name, or scan a book'}"
+             aria-label="Your library card, your name, or a book to return"
              role="combobox" aria-controls="k-suggest" aria-expanded="false">
       <ul id="k-suggest" class="k-suggest" role="listbox" hidden></ul>
     </div>
@@ -272,6 +275,15 @@ function coverImg(it) {
 /* A scanner types letters/digits with no spaces; people type titles with spaces. */
 function looksScanned(v) { return /^[\w-]+$/.test(v) && /\d/.test(v); }
 
+/* A card number that matches nobody. Worth telling apart from an unknown book,
+   because "that book isn't in our library" to a child holding their own card
+   is the kind of thing that sends them to the back of the queue twice. */
+function looksLikeCard(v) {
+  const prefix = normCode((S().patronPrefix || 'ST') + '-');
+  return prefix.length > 1 && normCode(v).indexOf(prefix) === 0;
+}
+const NO_SUCH_CARD = 'That card isn\u2019t one of ours. Please ask your teacher.';
+
 /* ------------------------------ welcome: name box ------------------------------ */
 
 function wireNameBox(input) {
@@ -282,7 +294,7 @@ function wireNameBox(input) {
 
   function draw() {
     const q = input.value.trim();
-    if (!q || findItemByCode(q)) { close(); return; }
+    if (!q || findItemByCode(q) || findPatronByCode(q)) { close(); return; }
     options = searchPatrons(q, 6);
     if (!options.length) { close(); return; }
     list.innerHTML = options.map((p, i) =>
@@ -300,8 +312,13 @@ function wireNameBox(input) {
     if (!v) return;
     const item = findItemByCode(v);
     if (item) { input.value = ''; close(); returnFromWelcome(item); return; }
+    // A library card. Checked before the name, because a card number is exact
+    // and a name typed by an eleven-year-old in a queue is not.
+    const byCard = findPatronByCode(v);
+    if (byCard) { input.value = ''; close(); signIn(byCard); return; }
     const exact = findPatronByName(v);
     if (exact) { signIn(exact); return; }
+    if (looksLikeCard(v)) { close(); input.value = ''; showResult('warn', NO_SUCH_CARD); return; }
     if (looksScanned(v)) { close(); input.value = ''; showResult('warn', 'That book isn\'t in our library yet. Please give it to your teacher.'); return; }
     close();
     offerNewStudent(v);
@@ -479,8 +496,16 @@ function signOut() {
 
 function studentScan(v) {
   const me = K.student;
+  // Someone else's card: the next student has stepped up to the station.
+  const byCard = findPatronByCode(v);
+  if (byCard) {
+    if (byCard.id === me.id) { showResult('info', `That's your own card, <strong>${esc(me.name)}</strong>. Scan a book.`); return; }
+    signIn(byCard);
+    return;
+  }
   const item = findItemByCode(v);
   if (!item) {
+    if (looksLikeCard(v)) { showResult('warn', NO_SUCH_CARD); return; }
     if (looksScanned(v)) { showResult('warn', 'That book isn\'t in our library yet. Please give it to your teacher.'); return; }
     showSearch(v);
     return;

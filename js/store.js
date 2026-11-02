@@ -845,6 +845,56 @@ function patronGroups() {
   return Object.keys(seen).sort().map(k => seen[k]);
 }
 
+/* Copies of the same book that have been filed under different genres.
+
+   It happens the ordinary way: a second copy arrives a year later, nobody
+   remembers where the first one went, and the two sit in different places for
+   good. One copy of The Great Gatsby ended up under Nonfiction next to three
+   under Historical Fiction exactly like this.
+
+   Copies are matched on title and author rather than ISBN, because a paperback
+   reissue carries a different ISBN and still belongs on the same shelf. Books
+   with no genre at all are left out — that is a different problem, already
+   counted elsewhere, and folding it in here would bury the real disagreements. */
+function genreDisagreements() {
+  const groups = {};
+  DB.items.forEach(i => {
+    if (!i.genre) return;
+    const key = normName(i.title) + '\u0000' + normName(i.author || '');
+    (groups[key] = groups[key] || []).push(i);
+  });
+  return Object.keys(groups).map(key => {
+    const copies = groups[key];
+    const genres = {};
+    copies.forEach(i => { genres[i.genre] = (genres[i.genre] || 0) + 1; });
+    const names = Object.keys(genres);
+    if (names.length < 2) return null;
+    return {
+      title: copies[0].title,
+      author: copies[0].author || '',
+      copies: copies,
+      // Commonest first: the majority is usually the one that was meant.
+      genres: names.sort((a, b) => genres[b] - genres[a] || a.localeCompare(b)).map(g => ({ genre: g, count: genres[g] }))
+    };
+  }).filter(Boolean).sort((a, b) => a.title.localeCompare(b.title));
+}
+
+/* Settles one group: every copy takes the same genre. */
+function agreeGenre(itemIds, genre) {
+  const clean = String(genre || '').trim();
+  if (!clean) return { ok: false, error: 'Pick a genre.' };
+  let changed = 0;
+  (itemIds || []).forEach(id => {
+    const item = itemById(id);
+    if (!item || normName(item.genre) === normName(clean)) return;
+    item.genre = clean;
+    delete item.genreGuessed;
+    changed++;
+  });
+  if (changed) saveDB();
+  return { ok: true, changed: changed };
+}
+
 const troubledItems = () => DB.items.filter(i => i.status).sort((a, b) => new Date(b.statusAt || 0) - new Date(a.statusAt || 0));
 
 /* --- what students thought --- */

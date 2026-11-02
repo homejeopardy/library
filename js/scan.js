@@ -139,7 +139,9 @@ const Scan = (function () {
       li.className = 'cam-line' + (kind ? ' cam-' + kind : '');
       li.textContent = text;
       log.insertBefore(li, log.firstChild);
-      while (log.children.length > 4) log.removeChild(log.lastChild);
+      // Three. An answer about a book runs to four lines of its own, and a
+      // taller stack than this starts covering the thing being pointed at.
+      while (log.children.length > 3) log.removeChild(log.lastChild);
     }
 
     function close() {
