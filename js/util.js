@@ -82,6 +82,13 @@ function plural(n, one, many) {
   return n + ' ' + (n === 1 ? one : (many || one + 's'));
 }
 
+/* A list of things read out as a person would say it: a, b and c. */
+function sentence(parts) {
+  const list = parts.filter(Boolean);
+  if (list.length < 2) return list[0] || '';
+  return list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+}
+
 function toast(message, kind) {
   const box = document.getElementById('toasts');
   const el = document.createElement('div');

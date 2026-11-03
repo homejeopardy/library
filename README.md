@@ -137,9 +137,11 @@ app's own repository is public.
 3. **Your main computer** — the one that already has your library. Open the app, choose
    **Use the access key instead**, paste the key, **Connect**. Your books and students
    upload. **This is the only time the key is ever typed.**
-4. **Make your account.** Type your name on the sign-in screen and pick a password (at
-   least 8 characters). From now on, that name and password open the library on any
-   computer — you never touch the key again.
+4. **Make your account.** The library has no accounts yet, so type your name on the
+   sign-in screen and pick a password (at least 8 characters). From now on, that name and
+   password open the library on any computer — you never touch the key again. This is the
+   only account that makes itself; everybody else is added in **Settings → Advanced →
+   Who can sign in**, with a temporary password.
 5. **Every other computer:** go to the site, sign in with your name and password. That's
    the whole setup. If the browser's data is ever cleared, sign in again and everything
    comes back.
@@ -627,13 +629,46 @@ back to students** rather than Sign out, and pressing it returns to the student 
 On your own computer nothing changes: go straight to the admin address and stay signed in
 until you sign out.
 
+## The two halves of Settings
+
+The top of **Settings** is the everyday kind: how the screen looks, what the library is
+called, how long a loan runs, and the genre list. Everything that is reached a few times
+a year and does something large when it is — the GitHub connection, who may sign in,
+going back to an earlier day, backup and erasing the library — is folded into
+**Advanced** at the bottom. It is shut when the page opens, and shut again the next time:
+whether it is open is remembered only while the page is, so saving something inside it
+never snaps it closed underneath you.
+
+Sections you have no permission for are not on the page at all, and if none of the
+advanced ones are yours, the fold itself does not appear.
+
 ## Who can sign in
 
-**Settings → Who can sign in** lists the accounts. A new person signs in on a computer
-that is already connected, types their name, and picks a password — the app locks a copy
-of the access key with it. **Reset password** removes their locked copy; they pick a new
-one next time they sign in on a connected computer. Nobody, including you, can look up an
-existing password.
+**Settings → Advanced → Who can sign in** is where accounts are made, and the only
+place. **Nobody can give themselves one** — typing an unused name at the sign-in screen gets you nothing
+but a note saying to ask whoever runs the library, even on a computer that is already
+connected.
+
+To add somebody: type their name, and the app generates a **temporary password** beside
+it. Press **Add**, read them the password — it is shown on their row until the page is
+reloaded, and stored nowhere — and the first time they sign in with it the app stops them
+there and makes them pick their own. Their row says **Waiting to sign in** until they do.
+
+**Reset password** issues a fresh temporary password the same way, which is the answer
+when somebody forgets theirs. It keeps the person and their ticks exactly where they
+were; their old password stops working at once. **Remove** takes the account away for
+good. Nobody, including you, can look up an existing password.
+
+The temporary password is twelve characters of chance rather than a phrase, and that is
+deliberate: it locks the real access key, and the file it sits in is public, so anyone may
+take a copy away and grind at it for a week without the school ever knowing. You can type
+your own over it — eight characters is the floor — but anything a person would invent is
+the weakest part of the whole arrangement.
+
+The very first account is the exception, because there has to be a way to start: on a
+library with no accounts at all, whoever holds the access key types their name at the
+sign-in screen and picks a password, and that account gets the run of the place. The
+moment it exists, that door closes.
 
 Accounts live in the public `library-accounts` repository. Each entry is the access key
 encrypted with that person's password (AES-GCM, with the password stretched by PBKDF2 at
@@ -643,8 +678,8 @@ few unrelated words beat a short clever one.
 
 ### What each person may do
 
-Under every name is a tick list. The first account made — yours — gets everything.
-Everyone after starts with the everyday work and is ticked up from there:
+Under every name is a tick list. The first account — yours — gets everything. Everyone
+you add after that starts with the everyday work and is ticked up from there:
 
 | Tick | Covers |
 | --- | --- |
@@ -658,8 +693,10 @@ Everyone after starts with the everyday work and is ticked up from there:
 | Rewind and export | Earlier versions, restoring, downloading the data |
 
 Ticking saves at once; there is no Save button. A person's buttons disappear along with
-the permission, the Settings tab hides itself if they have none of the last three, and
-the action is refused even if the button is reached another way. Someone can always
+the permission, the sections of Settings they have no use for are not on the page at all,
+and the action is refused even if the button is reached another way. Settings itself is a
+tab everybody has, because its first section is how the screen looks, and that belongs to
+whoever is looking at it. Someone can always
 *look* at the whole library — the ticks govern changing it.
 
 The last person who can manage people cannot have that tick taken away, or nobody could
@@ -787,12 +824,22 @@ everywhere at once.
 
 **It is dark by default.** That is the app's own look rather than a night mode the
 system turns on — opening it on a Mac set to Light still gives you the dark plum page.
-The daylight palette (sage page, white cards) is still in the stylesheet and still
-maintained; one attribute brings it back:
+The daylight palette (sage page, white cards) is a first-class alternative, not a
+leftover: **Settings → How this looks** switches between **Dark**, **Light** and **Match
+this computer**, the last of which hands the decision to the Mac or the iPad and follows
+it the moment it changes.
 
-```html
-<html lang="en" data-role="admin" data-theme="light">
-```
+The teacher's page and the student station keep **separate choices**, because the station
+often sits in a window where a dark screen is a mirror. Both are remembered in that
+browser on that device and never synced: it is the screen in front of you rather than a
+setting that belongs to the library, so nobody's choice follows anyone else to another
+computer. Setting the station's look from your own laptop therefore changes the station
+*on that laptop* — on the station's own iPad, go in through its **Staff** button.
+
+`js/theme.js` is loaded from `<head>`, ahead of everything else, so a page that is meant
+to be light never flashes dark on its way there. It resolves "match this computer" itself
+and writes `data-theme` on `<html>`; the stylesheet keeps one dark palette and one light
+one and nothing in between.
 
 Headings are **Manrope** at its lightest weight, body text is **Fira Sans**, and
 anything in a fixed pitch — barcodes, call numbers, the scan box — is **Fira Mono**.
@@ -823,6 +870,7 @@ fonts/              Manrope, Fira Sans and Fira Mono, served from here so the ap
                     keeps its typeface with no network
 kiosk.css           student-page layout (big type, big targets)
 js/config.js        which GitHub repository holds the shared data
+js/theme.js         light or dark, decided before the first paint; per device
 js/util.js          dates, formatting, CSV, toasts
 js/store.js         the data model and every rule (loans, holds, limits, merges, backup)
 js/sync.js          GitHub sync: fetch, three-way merge, write, retry
@@ -830,7 +878,8 @@ js/genre-art.js     the genre drawings, inlined for printing
 js/kiosk.js         the student page
 js/lookup.js        ISBN → book data (Open Library, then Google Books), and genre hints
 js/app.js           admin page: routing, views, and the circulation desk
-js/accounts.js      password-locked copies of the key, so a cleared browser can recover
+js/accounts.js      password-locked copies of the key, and the temporary passwords
+                    that let somebody in for the first time
 js/shelving.js      shelves, shelf-reading, stocktake and shelf cards
 js/barcode.js       Code 39 barcodes as SVG
 js/pwa.js           registers the service worker, and keeps the browser's install offer

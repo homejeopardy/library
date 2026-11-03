@@ -9,13 +9,15 @@
    small PUBLIC repository. Signing in unlocks that copy; without the
    password the file is useless.
 
-   - A password is picked the first time, on a computer that is
-     already connected — that is where the key being locked up comes
-     from.
+   - Accounts are added in Settings, on a computer that is already
+     connected — that is where the key being locked up comes from.
+     The person is given a temporary password, and picks their own the
+     first time they sign in. Nobody can make themselves an account.
    - Passwords are never stored or sent anywhere. Forgetting one means
-     resetting the account (Settings) and picking again.
+     issuing a new temporary password (Settings).
    - The file is public, so a short or guessable password can be worn
-     down by someone patient. Eight characters is the minimum.
+     down by someone patient. Eight characters is the minimum, and the
+     temporary ones this file makes up are a good deal more than that.
 
    Same design as the yearbook help desk, deliberately: it is proven,
    and one habit covers both.
@@ -32,6 +34,25 @@ const Accounts = (function () {
   const b64 = buf => btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
   const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   function fail(kind, message) { return Object.assign(new Error(message), { kind: kind }); }
+
+  /* A temporary password has to be worth more than a guess. It locks the real
+     access key, and the file it sits in is public, so anyone can take a copy away
+     and try words against it all week without the school ever knowing. So it is
+     twelve characters of chance rather than a phrase — out of an alphabet with no
+     0 or O and no 1 or l in it, so it can be read down a corridor and typed once.
+     Someone who insists on making one up instead gets MIN_PASSWORD and a warning. */
+  const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';   // 31 characters
+  function tempPassword() {
+    const out = [];
+    while (out.length < 12) {
+      const batch = crypto.getRandomValues(new Uint8Array(16));
+      for (let i = 0; i < batch.length && out.length < 12; i++) {
+        // 248 = 8 x 31. Anything above it would make the first few letters likelier.
+        if (batch[i] < 248) out.push(ALPHABET[batch[i] % ALPHABET.length]);
+      }
+    }
+    return out.slice(0, 4).join('') + '-' + out.slice(4, 8).join('') + '-' + out.slice(8).join('');
+  }
 
   async function keyFor(password, salt, iterations) {
     const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
@@ -106,14 +127,26 @@ const Accounts = (function () {
   /* Creates the account, or re-locks it (new password, or a replaced access key).
      What the person may do rides alongside in plain sight: the file is public, so it
      says only that someone named Sam may print labels — never anything secret. An
-     account re-locked without a list keeps the one it had. */
-  async function save(name, password, token, can) {
+     account re-locked without a list keeps the one it had.
+
+     opts.temp marks the lock as a temporary one, handed out by whoever added the
+     person. The app refuses to let them past the sign-in with it still set, so the
+     flag coming off is the same event as them choosing their own password. That it
+     is readable in a public file is fine and rather the point: it says only that
+     this account is waiting for its owner. */
+  async function save(name, password, token, can, opts) {
     if (String(password).length < MIN_PASSWORD) throw fail('password', 'Pick a password with at least ' + MIN_PASSWORD + ' characters.');
     const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
     const key = await keyFor(password, salt, ITERATIONS);
     const box = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, enc.encode(JSON.stringify({ token: token })));
     const was = await find(name);
-    const account = { user: norm(name), name: String(name).trim(), salt: b64(salt), iv: b64(iv), box: b64(box), iter: ITERATIONS, at: new Date().toISOString() };
+    /* "since" means when the person was added, so a change of password leaves it alone. */
+    const account = { user: norm(name), name: String(name).trim(), salt: b64(salt), iv: b64(iv), box: b64(box), iter: ITERATIONS, at: (was && was.at) || new Date().toISOString() };
+    if (opts && opts.temp) {
+      account.temp = true;
+      account.tempAt = new Date().toISOString();
+      if (opts.by) account.by = String(opts.by).trim();
+    }
     const list = can || (was && was.can);
     if (list) account.can = list.slice();
     await change(all => all.filter(a => a.user !== account.user).concat(account));
@@ -133,5 +166,5 @@ const Accounts = (function () {
   }
 
   return { load: load, find: find, unlock: unlock, save: save, setAbilities: setAbilities,
-    remove: remove, norm: norm, repo: repo, MIN_PASSWORD: MIN_PASSWORD };
+    remove: remove, norm: norm, repo: repo, tempPassword: tempPassword, MIN_PASSWORD: MIN_PASSWORD };
 })();

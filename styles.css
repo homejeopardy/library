@@ -1218,6 +1218,65 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .shelf-genres .tick { padding: 4px 0; align-items: center; }
 .shelf-genres .tick > span { display: flex; align-items: center; gap: 6px; }
 
+/* The folded half of Settings: the things reached a few times a year. Shut, it is
+   one quiet row; open, it is the page it always was, set back a little so it is
+   plain where it begins and ends. */
+.advanced { margin-top: 26px; border-top: 1px solid var(--border); }
+.advanced > summary {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 14px 2px; cursor: pointer; list-style: none;
+  border-radius: var(--radius-sm);
+}
+.advanced > summary::-webkit-details-marker { display: none; }
+.advanced > summary::before {
+  content: "›"; font-size: 19px; line-height: 1; color: var(--text-muted);
+  transition: transform .15s ease; transform-origin: 50% 55%;
+}
+.advanced[open] > summary::before { transform: rotate(90deg); }
+.advanced > summary:hover .advanced-title { color: var(--accent); }
+.advanced > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.advanced-title { font-family: var(--head); font-weight: 600; font-size: 16px; letter-spacing: -.01em; }
+.advanced-sub { font-size: 13px; color: var(--text-muted); }
+/* On a phone the list of what's inside wraps to three lines of grey, which is more
+   of the screen than the fold is worth. One tap shows the real thing. */
+@media (max-width: 560px) { .advanced-sub { display: none; } }
+.advanced-body { padding: 2px 0 6px 17px; border-left: 1px solid var(--border); margin-left: 5px; }
+.advanced-body > .section-title:first-child { margin-top: 6px; }
+
+/* Light and dark, one of three. The same segmented control as the catalogue
+   filters, because it is the same kind of choice. */
+.theme-rows { display: grid; gap: 12px; margin-top: 12px; }
+.theme-row { display: flex; align-items: center; gap: 14px 18px; flex-wrap: wrap; }
+.theme-row > span:first-child { font-weight: 550; max-width: 32em; }
+.theme-row > span:first-child .small { font-weight: 400; }
+.theme-row .chips { margin-left: auto; flex: 0 0 auto; }
+@media (max-width: 620px) { .theme-row .chips { margin-left: 0; } }
+
+/* Adding somebody: a name, and the password they will use once. Dashed, because
+   nothing is saved until Add is pressed. */
+.add-person {
+  display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius);
+  padding: 14px 15px; margin: 12px 0 14px;
+}
+.add-person .field { flex: 1 1 190px; min-width: 0; }
+.add-person .actions { margin-top: 0; }
+.add-person .hint { flex: 1 1 100%; margin-top: 2px; }
+/* .field input sets a family of its own, so this has to be as specific to win. */
+.field input.temp-pw, .person-temp .temp-pw { font-family: var(--mono); letter-spacing: .02em; }
+
+/* The temporary password, shown once, while it is being written on a slip. */
+.person-temp {
+  display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap;
+  margin-top: 10px; padding: 10px 13px;
+  border-radius: var(--radius-sm); background: var(--warn-soft);
+}
+.person-temp .temp-pw { font-size: 16px; font-weight: 600; }
+.person-temp .btn { padding: 4px 12px; font-size: 12.5px; }
+/* The sentence about it going away gets a line of its own, rather than a column
+   squeezed in beside the password it is about. */
+.person-temp .small { color: var(--text-muted); flex: 1 1 100%; }
+
 .person-can { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 2px 18px; margin-top: 10px; }
 .tick { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: start; padding: 6px 0; }
 .tick input { margin: 2px 0 0; }

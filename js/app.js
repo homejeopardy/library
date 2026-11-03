@@ -105,7 +105,9 @@ const NEEDS = {
   'genre-delete': 'setup', 'genre-defaults': 'setup', 'reset-all': 'setup',
   'import-json': 'setup', 'load-sample': 'setup',
 
-  'account-reset': 'accounts', 'account-can': 'accounts',
+  /* Choosing light or dark needs nothing: it is this device's own screen. */
+  'account-add': 'accounts', 'account-reset': 'accounts', 'account-can': 'accounts',
+  'account-remove': 'accounts', 'account-reroll': 'accounts', 'account-copy-temp': 'accounts',
   'sync-connect': 'accounts', 'sync-disconnect': 'accounts',
   'pair-show': 'accounts', 'pair-copy': 'accounts', 'pair-qr': 'accounts', 'pair-file': 'accounts',
 
@@ -113,8 +115,11 @@ const NEEDS = {
   'export-json': 'history', 'export-loans-csv': 'history'
 };
 
-/* Tabs that are no use at all without one of these. */
-const TAB_NEEDS = { settings: ['setup', 'accounts', 'history'] };
+/* Tabs that are no use at all without one of these. Settings used to be listed
+   here; it isn't any more, because its first section is how this screen looks,
+   and that belongs to whoever is looking at it. Everything below that section
+   still comes and goes with what the person may do. */
+const TAB_NEEDS = {};
 const tabAllowed = r => !TAB_NEEDS[r] || TAB_NEEDS[r].some(Auth.can);
 
 /* Buttons for things this person may not do come off the page rather than sitting
@@ -389,8 +394,17 @@ const Auth = (function () {
      accounts, which would lock the teacher out of her own library. */
   function needsSignIn() {
     if (get(ME)) return false;
+    if (reprieve && Sync.configured()) return false;
     return get(SEEN) === '1' || !Sync.configured();
   }
+
+  /* This browser opened on the access key alone, with no account anywhere to sign
+     in to. Adding the first account — hers, most likely — must not throw her off
+     the page in the middle of doing it, so the gate waits until the next time the
+     app is opened. She is holding the key, which is the older and the stronger of
+     the two credentials; nothing here lets her past anything she wasn't already
+     past a second ago. */
+  const reprieve = !get(ME) && get(SEEN) !== '1' && Sync.configured();
 
   /* Remember whether accounts exist, so the gate works before the network answers. */
   function noteAccounts(list) { set(SEEN, list && list.length ? '1' : null); }
@@ -431,6 +445,9 @@ const Auth = (function () {
     signOut: () => {
       const wasTemporary = temporary();
       set(ME, null); set(TEMP, null); set(CAN, null);
+      /* Back to the top of the sign-in, or the next person would be handed the
+         screen the last one left behind — at worst the one that sets a password. */
+      resetGate();
       if (wasTemporary) { location.href = 'student/'; return; }
       render();
     },
@@ -439,7 +456,9 @@ const Auth = (function () {
   };
 })();
 
-let gate = { step: 'name', name: '', account: null, error: '', busy: false };
+let gate;
+function resetGate() { gate = { step: 'name', name: '', account: null, error: '', busy: false }; }
+resetGate();
 
 function renderSignIn() {
   const g = gate;
@@ -459,7 +478,19 @@ function renderSignIn() {
         <button type="submit" class="btn btn-primary">Sign in</button>
         <button type="button" class="btn btn-quiet" data-gate="name">Back</button>
       </div>`,
-    create: `<p>First time for <strong>${esc(g.name)}</strong> — pick a password. You'll use it with your name on any computer.</p>
+    renew: `<p>That was a temporary password. Pick your own now, <strong>${esc(g.name)}</strong> — it is the one you'll use with your name from here on, and nobody else ever sees it.</p>
+      <input class="sr-only" type="text" name="username" value="${esc(g.name)}" autocomplete="username" readonly tabindex="-1" aria-hidden="true">
+      <div class="grid-2">
+        <label class="field"><span>Your password</span>
+          <input name="password" type="password" autocomplete="new-password"></label>
+        <label class="field"><span>And again</span>
+          <input name="again" type="password" autocomplete="new-password"></label>
+      </div>
+      <p class="hint">At least ${Accounts.MIN_PASSWORD} characters. Nobody can look it up for you, but a fresh temporary one can be issued from Settings.</p>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Save and carry on</button>
+      </div>`,
+    create: `<p>Nobody has set this library up yet, so this account is the first one and gets the run of the place. Pick a password, <strong>${esc(g.name)}</strong> — you'll use it with your name on any computer, and everyone after you is added from Settings.</p>
       <input class="sr-only" type="text" name="username" value="${esc(g.name)}" autocomplete="username" readonly tabindex="-1" aria-hidden="true">
       <div class="grid-2">
         <label class="field"><span>Password</span>
@@ -517,8 +548,13 @@ async function gateSubmit(form) {
       Auth.noteAccounts(all);
       const account = all.find(a => Accounts.norm(a.user) === Accounts.norm(typed));
       if (account) gate = { step: 'password', name: account.name, account: account, error: '' };
-      else if (Sync.configured()) gate = { step: 'create', name: typed, account: null, error: '' };
-      else return fail('There is no account for ' + typed + ' yet. The first time, sign in on a computer that is already set up, or use the access key below.');
+      /* Only the very first account makes itself. After that, typing a name nobody
+         has used gets you nowhere: an account is added in Settings and comes with a
+         temporary password, so walking up to a connected computer and inventing a
+         name is not a way in. */
+      else if (Sync.configured() && !all.length) gate = { step: 'create', name: typed, account: null, error: '' };
+      else if (Sync.configured()) return fail('There is no account for ' + typed + '. Whoever runs the library adds people in Settings, under "Who can sign in", and hands out a temporary password.');
+      else return fail('There is no account for ' + typed + ' yet, and this computer is not connected. Use the access key below, or sign in on a computer that is already set up.');
       return renderSignIn();
     }
 
@@ -528,15 +564,37 @@ async function gateSubmit(form) {
       if (res.next === 'ask') Sync.adopt(res.summary, 'merge');
       await Sync.syncNow();
       requestPersistence();
+      /* A temporary password gets you this far and no further: the next screen is
+         picking your own, and there is no way past it to the library. */
+      if (gate.account.temp) {
+        gate = { step: 'renew', name: gate.account.name, account: gate.account, error: '' };
+        return renderSignIn();
+      }
+      return Auth.signIn(gate.account.name, gate.account.can);
+    }
+
+    if (gate.step === 'renew') {
+      if (form.password.value !== form.again.value) return fail("Those two passwords don't match.");
+      /* Re-locking the same key under the new password, and keeping whatever this
+         person was ticked for. Saving it is what takes the temporary mark off. */
+      await Accounts.save(gate.account.name, form.password.value, Sync.key(), null);
+      Auth.noteAccounts([1]);
+      toast('Password set. Welcome.', 'ok');
       return Auth.signIn(gate.account.name, gate.account.can);
     }
 
     if (gate.step === 'create') {
       if (form.password.value !== form.again.value) return fail("Those two passwords don't match.");
-      /* The first account is the teacher's own, so it gets everything. After that a
-         new person starts with the everyday work and is ticked up from Settings. */
-      const first = !(await Accounts.load()).accounts.length;
-      const can = first ? ABILITIES.map(a => a.key) : EVERYDAY.slice();
+      /* Checked again here rather than only before the form was drawn: between the
+         two, someone else may have made the first account, and this is no longer a
+         library with nobody in it. */
+      const all = (await Accounts.load()).accounts;
+      if (all.length) {
+        Auth.noteAccounts(all);
+        gate = { step: 'name', name: gate.name, account: null, error: '' };
+        return fail('Someone has set this library up already. Ask them to add you in Settings, under "Who can sign in".');
+      }
+      const can = ABILITIES.map(a => a.key);
       await Accounts.save(gate.name, form.password.value, Sync.key(), can);
       Auth.noteAccounts([1]);
       return Auth.signIn(gate.name, can);
@@ -648,6 +706,12 @@ async function drawPairingQR(which) {
   }
 }
 
+/* The temporary passwords handed out since this page was opened, so the row can
+   go on showing one while it is still being written on a slip of paper. They are
+   deliberately not stored: a reload loses them, and then the answer is a fresh
+   one rather than digging the old one out of anywhere. */
+const shownTemps = Object.create(null);
+
 async function drawAccounts() {
   const box = document.getElementById('accounts-list');
   if (!box) return;
@@ -674,14 +738,28 @@ function personHTML(account, list) {
   const holds = a => !Array.isArray(a.can) || a.can.indexOf('accounts') !== -1;
   const onlyOneLeft = list.filter(holds).length <= 1;
   const mayEdit = Auth.can('accounts');
+  /* The last person who can manage people can't be shown the door either, or the
+     account list would be shut for good. */
+  const lastWayIn = holds(account) && onlyOneLeft;
+  const temp = shownTemps[account.user];
   return `<section class="person">
     <div class="person-head">
       <strong>${esc(account.name)}</strong>${me ? ' <span class="muted small">(you)</span>' : ''}
+      ${account.temp ? '<span class="badge badge-warn">Waiting to sign in</span>' : ''}
       <span class="muted small">since ${esc(fmtDate(account.at))}</span>
       <span class="row-actions">
-        <button class="link danger" data-act="account-reset" data-id="${esc(account.user)}">Reset password</button>
+        <button class="link" data-act="account-reset" data-id="${esc(account.user)}">${account.temp ? 'Another temporary password' : 'Reset password'}</button>
+        ${lastWayIn ? '' : `<button class="link danger" data-act="account-remove" data-id="${esc(account.user)}">Remove</button>`}
       </span>
     </div>
+    ${account.temp && !temp ? `<p class="hint">Hasn't picked a password yet${account.by ? ' — added by ' + esc(account.by) : ''}${account.tempAt ? ' on ' + esc(fmtDate(account.tempAt)) : ''}.
+        A temporary password is only ever shown once; if it has been lost, issue another.</p>` : ''}
+    ${temp ? `<div class="person-temp">
+        <span>Temporary password for <strong>${esc(account.name)}</strong>:</span>
+        <code class="temp-pw">${esc(temp)}</code>
+        <button class="btn btn-quiet" data-act="account-copy-temp" data-id="${esc(account.user)}">Copy</button>
+        <span class="small">They pick their own the first time they sign in. This disappears when the page is reloaded.</span>
+      </div>` : ''}
     ${can === null
       ? `<p class="hint">Set up before there were permissions, so this account can do everything.
            Tick the boxes to limit it.</p>` : ''}
@@ -2162,13 +2240,93 @@ function tile(n, label, cls) {
 
 /* ============================== SETTINGS ============================== */
 
+/* ---------------------------------------------------------------
+   Light, dark, or whatever the computer is set to.
+
+   No permission guards this: it is the screen in front of whoever is
+   looking at it, not a setting that changes the library. That is also
+   why Settings is a tab everybody has now — the sections under this
+   one still appear only for the people they belong to.
+
+   Both switches write to this browser on this device, which is why
+   the station's one says so. Setting the station from the teacher's
+   laptop would otherwise look like it had done nothing.
+   --------------------------------------------------------------- */
+function appearanceHTML() {
+  const LABELS = { dark: 'Dark', light: 'Light', auto: 'Match this computer' };
+  const row = (which, title, note) => {
+    const now = Theme.get(which);
+    return `<div class="theme-row">
+      <span>${title}<br><span class="small muted">${note}</span></span>
+      <div class="chips" role="group" aria-label="${esc(title)}">
+        ${Theme.choices.map(c => `<button type="button" class="chip${now === c ? ' active' : ''}"
+          data-act="theme-pick" data-id="${which}:${c}" aria-pressed="${now === c}">${LABELS[c]}</button>`).join('')}
+      </div>
+    </div>`;
+  };
+  return `<h2 class="section-title">How this looks</h2>
+    <p class="hint">Dark unless you say otherwise. Remembered in this browser on this device, because it is
+      about the screen in front of you rather than about the library — it follows nobody to another computer.</p>
+    <div class="theme-rows">
+      ${row('admin', 'This page', 'Circulation, the catalogue, the shelves — everything behind the Staff button.')}
+      ${row('station', 'The student station', 'Only the station on <em>this</em> device. On the station’s own iPad, reach this page through its Staff button.')}
+    </div>
+`;
+}
+
+/* ---------------------------------------------------------------
+   Adding somebody.
+
+   A temporary password is generated rather than invented, because it
+   locks the real access key and the file it sits in is public: a word
+   and a number can be worn down offline by anyone who downloads it,
+   and nobody would ever know. It can be typed over, and the warning
+   under the field says what that costs.
+
+   It is shown once, on the row, until the page is reloaded. Nothing
+   stores it — the file keeps only what it unlocks.
+   --------------------------------------------------------------- */
+let nextTempPassword = null;
+const freshTempPassword = () => (nextTempPassword = Accounts.tempPassword());
+
+function addPersonHTML() {
+  if (!Sync.configured()) return `<p class="hint">Adding someone locks a copy of the access key for them, so it
+    has to be done on a computer that is connected. Connect this one above first.</p>`;
+  return `<div class="add-person">
+    <label class="field"><span>Their name</span>
+      <input id="new-account-name" autocomplete="off" placeholder="The name they'll sign in with"></label>
+    <label class="field"><span>Temporary password</span>
+      <input id="new-account-pw" class="temp-pw" autocomplete="off" value="${esc(nextTempPassword || freshTempPassword())}"></label>
+    <div class="actions">
+      <button class="btn btn-primary" data-act="account-add">Add</button>
+      <button class="btn btn-quiet" data-act="account-reroll">Another</button>
+    </div>
+    <p class="hint">Twelve characters of chance rather than a phrase: this password locks the key inside a
+      public file, so it has to be worth more than a guess. You can type over it — ${Accounts.MIN_PASSWORD}
+      characters at the very least — but anything a person would think up is a way in for anyone patient.
+      A new account starts with the everyday desk and shelf work; tick anything more on their row.</p>
+  </div>`;
+}
+
+/* ---------------------------------------------------------------
+   Settings, in two halves.
+
+   The top is the everyday kind — how the screen looks, what the
+   library is called, how long a loan runs, the genre list. Below it,
+   folded away, the kind that is reached a few times a year and does
+   something large when it is: the GitHub connection, who may sign in,
+   putting the library back to an earlier day, and erasing it.
+
+   Folded, not hidden. It stays shut between visits, and whether it is
+   open is remembered only while the page is, so a save in the middle
+   of it doesn't snap it closed underneath you.
+   --------------------------------------------------------------- */
+let advancedOpen = false;
+
 VIEWS.settings = function () {
   const s = S();
-  return `
-  <section class="pane narrow">
-    ${pageHead('Settings', 'How this library works, and who may change it', '')}
-    ${installSectionHTML()}
-    ${Auth.can('setup') ? `<h2 class="section-title">Library</h2>
+
+  const library = !Auth.can('setup') ? '' : `<h2 class="section-title">Library</h2>
     <div class="grid-2">
       ${field('Library name', 'libraryName', s.libraryName)}
       ${field('Barcode prefix', 'barcodePrefix', s.barcodePrefix)}
@@ -2184,24 +2342,9 @@ VIEWS.settings = function () {
       <span>Add a student automatically the first time their name is typed at checkout</span>
     </label>
     <div class="actions"><button class="btn btn-primary" data-act="save-settings">Save settings</button></div>
+`;
 
-    ` : ''}${Auth.can('accounts') ? `<h2 class="section-title">Sync across devices</h2>
-    ${syncSettingsHTML()}
-
-    ` : ''}${Auth.can('accounts') ? `<h2 class="section-title">Who can sign in</h2>
-    <p class="hint">Each person unlocks the library with their own password, on any computer, without the access key.
-      A new person signs in here on this computer and picks a password the first time.
-      Accounts live in <code>${esc(Accounts.repo())}</code>; the password is never stored anywhere.</p>
-    <div id="accounts-list" class="muted">Loading…</div>
-
-    ` : ''}${Auth.can('history') ? `<h2 class="section-title">Earlier versions</h2>
-    ${Sync.configured()
-      ? `<p class="hint">Every save is kept. Open one to see what is different from now, and put back
-           the whole library or a single book. Nothing is lost by looking.</p>
-         <div class="actions"><button class="btn" data-act="history-open">Show earlier versions</button></div>`
-      : '<p class="hint">Turn on sync above and every save becomes a version you can go back to.</p>'}
-
-    ` : ''}${Auth.can('setup') ? `<h2 class="section-title">Genres</h2>
+  const genres = !Auth.can('setup') ? '' : `<h2 class="section-title">Genres</h2>
     <p class="hint">These are the choices in the Genre menu when you add a book. Renaming a genre updates every book in it; renaming one onto another merges them.</p>
     <ul class="genre-admin">
       ${genreList().map(g => {
@@ -2221,8 +2364,30 @@ VIEWS.settings = function () {
       <button class="btn" data-act="genre-add">Add</button>
     </div>
     <div class="actions"><button class="btn btn-quiet" data-act="genre-defaults">Restore default genres</button></div>
+`;
 
-    ` : ''}${Auth.can('history') ? `<h2 class="section-title">Backup</h2>
+  const sync = !Auth.can('accounts') ? '' : `<h2 class="section-title">Sync across devices</h2>
+    ${syncSettingsHTML()}
+`;
+
+  const people = !Auth.can('accounts') ? '' : `<h2 class="section-title">Who can sign in</h2>
+    <p class="hint">Each person unlocks the library with their own password, on any computer, without the access key.
+      People are added here and nowhere else: you hand over a temporary password, and they pick their own
+      the first time they sign in. Accounts live in <code>${esc(Accounts.repo())}</code>; no password is
+      stored anywhere, temporary or not.</p>
+    ${addPersonHTML()}
+    <div id="accounts-list" class="muted">Loading…</div>
+`;
+
+  const versions = !Auth.can('history') ? '' : `<h2 class="section-title">Earlier versions</h2>
+    ${Sync.configured()
+      ? `<p class="hint">Every save is kept. Open one to see what is different from now, and put back
+           the whole library or a single book. Nothing is lost by looking.</p>
+         <div class="actions"><button class="btn" data-act="history-open">Show earlier versions</button></div>`
+      : '<p class="hint">Turn on sync above and every save becomes a version you can go back to.</p>'}
+`;
+
+  const backup = !Auth.can('history') ? '' : `<h2 class="section-title">Backup</h2>
     <p class="hint">${Sync.configured()
       ? 'The books themselves are safe: they live in GitHub as well as here, with every earlier version kept. Clearing this browser\'s cookies and site data empties its copy and forgets the key — opening your saved setup link or recovery file brings both straight back. (Clearing only the <em>cache</em> changes nothing.)'
       : 'Everything lives in this browser on this computer, and clearing cookies and site data erases it for good. Turn on sync above, or export a backup regularly — and always before clearing browsing data or switching machines.'}</p>
@@ -2232,20 +2397,51 @@ VIEWS.settings = function () {
       <button class="btn" data-act="import-json">Restore from backup…</button>
       <input type="file" id="import-file" accept="application/json,.json" hidden>
     </div>
+`;
 
-    ` : ''}${Auth.can('setup') ? `<h2 class="section-title">Danger zone</h2>
+  const danger = !Auth.can('setup') ? '' : `<h2 class="section-title">Danger zone</h2>
     <div class="actions">
       <button class="btn" data-act="load-sample" ${DB.items.length || Sync.configured() ? 'disabled title="Only available on an empty library that is not syncing"' : ''}>Load sample data</button>
       <button class="btn btn-danger" data-act="reset-all">Erase everything</button>
     </div>
     <p class="hint">Storage in use: ${esc(storageSize())}</p>
-    ` : ''}
+`;
+
+  /* What the fold is worth opening for, in the words of whoever may open it. */
+  const inside = [sync, people, versions, backup, danger].filter(Boolean).join('\n');
+  const covers = [
+    sync && 'the GitHub connection',
+    people && 'who can sign in',
+    versions && 'earlier versions',
+    backup && 'backup',
+    danger && 'erasing the library'
+  ].filter(Boolean);
+  const advanced = !inside ? '' : `<details class="advanced" id="advanced"${advancedOpen ? ' open' : ''}>
+    <summary>
+      <span class="advanced-title">Advanced</span>
+      <span class="advanced-sub">${esc(sentence(covers))}</span>
+    </summary>
+    <div class="advanced-body">${inside}</div>
+  </details>`;
+
+  return `
+  <section class="pane narrow">
+    ${pageHead('Settings', 'How this library works, and who may change it', '')}
+    ${installSectionHTML()}
+    ${appearanceHTML()}
+    ${library}
+    ${genres}
+    ${advanced}
   </section>`;
 };
 
 AFTER.settings = function () {
   showPersistence();
   drawAccounts();
+  /* Adding somebody redraws the page; the fold they were working in should still
+     be open underneath them, with the temporary password still on the row. */
+  const advanced = document.getElementById('advanced');
+  if (advanced) advanced.addEventListener('toggle', () => { advancedOpen = advanced.open; });
   view.querySelectorAll('.key-form').forEach(form => form.addEventListener('submit', e => {
     e.preventDefault();
     connectWithKey(form.querySelector('#sync-key').value, form.querySelector('button[type="submit"]'));
@@ -2255,6 +2451,16 @@ AFTER.settings = function () {
   const newGenre = document.getElementById('new-genre');
   if (newGenre) newGenre.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); ACTIONS['genre-add'](); }
+  });
+  /* Enter in either field adds the person — through the button, so the action
+     gets the button to disable while GitHub is thinking. */
+  view.querySelectorAll('#new-account-name, #new-account-pw').forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const btn = view.querySelector('[data-act="account-add"]');
+      if (btn) btn.click();
+    });
   });
   const file = document.getElementById('import-file');
   if (!file) return;
@@ -2567,13 +2773,96 @@ shared drives and out of the hands of students.</p>
   },
   'history-open': () => openHistoryModal(),
 
+  'theme-pick': id => {
+    const bits = String(id).split(':');
+    Theme.set(bits[0], bits[1]);
+    render();
+  },
+
+  'account-add': async (id, btn) => {
+    const nameEl = document.getElementById('new-account-name');
+    const pwEl = document.getElementById('new-account-pw');
+    const name = nameEl.value.trim();
+    const password = pwEl.value.trim();
+    if (!name) { toast('Type the name they will sign in with.', 'error'); nameEl.focus(); return; }
+    if (password.length < Accounts.MIN_PASSWORD) {
+      toast('A temporary password needs at least ' + Accounts.MIN_PASSWORD + ' characters.', 'error');
+      pwEl.focus(); pwEl.select(); return;
+    }
+    btn.disabled = true;
+    try {
+      const all = (await Accounts.load()).accounts;
+      const already = all.find(a => a.user === Accounts.norm(name));
+      if (already) {
+        toast('There is already an account for ' + already.name + '. Use "Reset password" on their row instead.', 'error');
+        btn.disabled = false;
+        return;
+      }
+      /* The first account in an empty library is whoever is setting it up, so it
+         gets the run of the place — otherwise there would be nobody who could add
+         the second person. Everyone after that starts at the desk. */
+      const first = !all.length;
+      const can = first ? ABILITIES.map(a => a.key) : EVERYDAY.slice();
+      await Accounts.save(name, password, Sync.key(), can, { temp: true, by: Auth.me() || '' });
+      shownTemps[Accounts.norm(name)] = password;
+      nextTempPassword = null;
+      Auth.noteAccounts([1]);
+      toast(first
+        ? name + ' is the first account, so it can do everything. Sign in with the temporary password to finish setting it up.'
+        : name + ' can sign in now. Hand over the temporary password.', 'ok');
+      render();
+    } catch (e) {
+      toast(e.message, 'error');
+      btn.disabled = false;
+    }
+  },
+
+  'account-reroll': () => {
+    const pwEl = document.getElementById('new-account-pw');
+    if (!pwEl) return;
+    pwEl.value = freshTempPassword();
+    pwEl.focus();
+    pwEl.select();
+  },
+
+  'account-copy-temp': async user => {
+    const password = shownTemps[Accounts.norm(user)];
+    if (!password) { toast('That password is no longer on screen. Issue another one.', 'error'); return; }
+    try {
+      await navigator.clipboard.writeText(password);
+      toast('Copied.', 'ok');
+    } catch (e) {
+      toast('Copying needs permission in this browser — read it off the screen instead.', 'info');
+    }
+  },
+
+  /* Resetting no longer deletes the account, which would hand its name back to
+     anyone who typed it. It re-locks the same key under a temporary password and
+     keeps the person, and their ticks, exactly where they were. */
   'account-reset': async user => {
-    if (!confirm('Reset ' + user + "'s password? They pick a new one next time they sign in on a computer that is already connected.")) return;
+    const self = Accounts.norm(user) === Accounts.norm(Auth.me() || '');
+    if (!confirm('Give ' + user + ' a new temporary password?\n\n'
+      + 'Whatever password they had stops working at once. They sign in with the temporary one and pick their own straight away.'
+      + (self ? '\n\nThis is your own account. You stay signed in on this computer, but signing in anywhere else will need the temporary password.' : ''))) return;
+    try {
+      const account = await Accounts.find(user);
+      if (!account) { toast('That account is no longer there.', 'error'); drawAccounts(); return; }
+      const password = Accounts.tempPassword();
+      await Accounts.save(account.name, password, Sync.key(), null, { temp: true, by: Auth.me() || '' });
+      shownTemps[Accounts.norm(user)] = password;
+      toast('A new temporary password for ' + account.name + '.', 'ok');
+      render();
+    } catch (e) { toast(e.message, 'error'); }
+  },
+
+  'account-remove': async user => {
+    if (!confirm('Remove ' + user + '?\n\nThey can no longer sign in, on any computer. The books, students and loans are untouched.')) return;
     try {
       await Accounts.remove(user);
-      toast('Password reset.', 'ok');
+      delete shownTemps[Accounts.norm(user)];
+      toast('Removed.', 'ok');
       if (Accounts.norm(user) === Accounts.norm(Auth.me() || '')) Auth.signOut();
-      else drawAccounts();
+      else render();
     } catch (e) { toast(e.message, 'error'); }
   },
 
