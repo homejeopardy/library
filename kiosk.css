@@ -5,21 +5,29 @@
 
 body.kiosk { font-size: 17px; }
 
+/* The same olive band the teacher's side wears, so the two screens read as
+   one piece of the school's software from across the room. */
 .k-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 20px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--band);
+  color: var(--band-ink);
+  border-bottom: 1px solid rgba(46,28,35,.14);
+}
+.k-bar .sync-pill {
+  border-color: rgba(251,250,244,.3);
+  background: rgba(251,250,244,.14);
+  color: var(--band-ink);
 }
 .k-bar .sync-pill { cursor: default; }
 
 .k-main { max-width: 760px; margin: 0 auto; padding: 28px 16px 80px; }
 
 .k-welcome { text-align: center; padding-top: 4vh; }
-.k-welcome h1 { font-size: 30px; margin: 0 0 8px; letter-spacing: -.01em; }
+.k-welcome h1 { font-size: 34px; margin: 0 0 8px; letter-spacing: -.035em; }
 .k-lead { color: var(--text-muted); margin: 0 0 22px; }
 
 .k-box { position: relative; text-align: left; }
@@ -79,7 +87,7 @@ body.kiosk { font-size: 17px; }
 .k-banner strong { color: var(--text); }
 
 .k-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 26px; }
-.k-columns h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin: 0 0 8px; }
+.k-columns h2 { font-family: var(--body); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin: 0 0 8px; }
 
 .k-list { list-style: none; margin: 0; padding: 0; }
 .k-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
@@ -172,14 +180,14 @@ body.kiosk { font-size: 17px; }
   appearance: none;
   border: 0;
   background: none;
-  color: var(--text-muted);
+  color: rgba(251,250,244,.8);
   font: inherit;
   font-size: 12px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: 999px;
   cursor: pointer;
 }
-.staff-link:hover { color: var(--text); background: var(--surface-2); }
+.staff-link:hover { color: var(--band-ink); background: rgba(251,250,244,.16); }
 
 /* ---------------- browsing the shelves ---------------- */
 

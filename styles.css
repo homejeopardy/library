@@ -1,62 +1,201 @@
 /* ---------------------------------------------------------------
    Classroom Library — one stylesheet, no framework.
-   Light and dark are both first-class; every color is a token.
+   The look follows blackpinecircle.org, the same way the yearbook
+   help desk does: pale sage page, plum-brown text, an olive header
+   band, light Manrope headings over Fira Sans, and pill buttons in
+   the school's blue with a soft drop shadow.
+   Light and dark are both first-class; every colour is a token.
+   --------------------------------------------------------------- */
+
+/* The school's typefaces, served from this repo rather than from Google.
+   The app has to work on a phone at the shelf with no signal, and the
+   service worker only caches what comes from our own origin — a webfont
+   fetched from fonts.gstatic.com would quietly fall back to the system
+   face every time the Wi-Fi drops. The ?v=1 is what makes the worker
+   treat them as immutable; bump it only if a font file itself changes.
+
+   Manrope is one variable file per subset covering every weight, so it is
+   declared once over a weight range rather than three times. */
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url(fonts/manrope-latin.woff2?v=1) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url(fonts/manrope-latin-ext.woff2?v=1) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/fira-sans-400-latin.woff2?v=1) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/fira-sans-400-latin-ext.woff2?v=1) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/fira-sans-500-latin.woff2?v=1) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/fira-sans-500-latin-ext.woff2?v=1) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(fonts/fira-sans-600-latin.woff2?v=1) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(fonts/fira-sans-600-latin-ext.woff2?v=1) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Fira Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/fira-mono-400-latin.woff2?v=1) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Fira Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/fira-mono-500-latin.woff2?v=1) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---------------------------------------------------------------
+   The palette. Dark is the app's own look — not a night mode the
+   system switches on — so it lives on :root and needs nothing to
+   turn it on. The school's six colours are the same in both; what
+   changes is what they sit on. BPC's dark plum footer band is the
+   page, the cream becomes the text, and the olive band stays the
+   olive band, deepened so cream still reads on it.
+
+   The daylight palette is kept behind data-theme="light" rather
+   than deleted: it is the same sage-and-cream the yearbook desk
+   wears, and setting one attribute brings it back.
    --------------------------------------------------------------- */
 
 :root {
-  --bg: #f4f5f6;
-  --surface: #ffffff;
-  --surface-2: #eceff1;
-  /* A third step, barely off the surface: table headings and resting panels
-     need to read as "not the page, not a card" without another border. */
-  --surface-3: #f7f8f9;
-  --border: #e1e5e8;
-  --border-strong: #c3cace;
-  --text: #15191c;
-  --text-muted: #5d686f;
-  --accent: #1f5f4f;
-  --accent-text: #ffffff;
-  --accent-soft: #e4efeb;
-  --accent-line: #2f7a66;
-  --ok: #1f6b45;
-  --ok-soft: #e3f0e9;
-  --warn: #8a5a10;
-  --warn-soft: #f7ecd9;
-  --danger: #a32b26;
-  --danger-soft: #f8e4e3;
-  /* Flat by default. A drop shadow marks something floating above the page —
-     a dialog, a menu, a toast — and nothing else, so the ones that float
-     actually read as floating. */
-  --shadow: 0 1px 2px rgba(17,24,28,.06);
-  --shadow-pop: 0 16px 44px rgba(17,24,28,.18), 0 2px 6px rgba(17,24,28,.08);
-  --radius: 8px;
-  --radius-sm: 6px;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+
+  /* The school's six, straight off blackpinecircle.org. These do not
+     change between the two palettes — they are the school. */
+  --sage: #ebf1df;
+  --cream: #f3f0e5;
+  --sand: #e3ddc8;
+  --olive: #8c9a4b;
+  --olive-deep: #5f6b2c;
+  --lime: #b8c86a;
+  --blue: #3367b5;
+  --blue-deep: #28549a;
+  --plum: #2e1c23;
+
+  --bg: #1b1116;
+  --surface: #271820;
+  --surface-2: #3e2a34;
+  --surface-3: #31202a;
+  --border: #46313a;
+  --border-strong: #6b4c57;
+  --text: var(--cream);
+  --text-muted: #b7a3a5;
+
+  /* The school blue is a daylight colour: at full strength on plum it is
+     a hole in the page. Lifted until it reads as the same blue. */
+  --accent: #96b8ef;
+  --accent-text: #15223a;
+  --accent-soft: #2d3c58;
+  --accent-line: var(--lime);
+
+  /* The header band and the text that sits on it. */
+  --band: var(--olive-deep);
+  --band-ink: #f6f4ea;
+
+  --ok: var(--lime);
+  --ok-soft: #313b1d;
+  --warn: #e0b26a;
+  --warn-soft: #3c2e1c;
+  --danger: #ef8d84;
+  --danger-soft: #45241f;
+
+  /* Panels stay flat. The lift belongs to the school's pill buttons, which
+     is where blackpinecircle.org puts it and the only place it carries
+     meaning: the thing you press stands off the page. */
+  --shadow: 0 1px 2px rgba(0,0,0,.45);
+  --lift: 0 4px 4px rgba(0,0,0,.45);
+  --lift-hover: 0 6px 10px rgba(0,0,0,.4);
+  --shadow-pop: 0 18px 48px rgba(0,0,0,.62), 0 2px 6px rgba(0,0,0,.45);
+
+  --radius: 10px;
+  --radius-sm: 8px;
+  --pill: 100px;
+  --head: Manrope, "Avenir Next", system-ui, sans-serif;
+  --body: "Fira Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Fira Mono", ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #121517;
-    --surface: #1a1e21;
-    --surface-2: #272c31;
-    --surface-3: #1f2328;
-    --border: #2e343a;
-    --border-strong: #454c53;
-    --text: #e8eaec;
-    --text-muted: #98a2aa;
-    --accent: #58b79b;
-    --accent-text: #0d211c;
-    --accent-soft: #1b322c;
-    --accent-line: #58b79b;
-    --ok: #6cc295;
-    --ok-soft: #1c3329;
-    --warn: #e0b26a;
-    --warn-soft: #362c1a;
-    --danger: #f08a83;
-    --danger-soft: #3a2321;
-    --shadow: 0 1px 2px rgba(0,0,0,.45);
-    --shadow-pop: 0 18px 48px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.4);
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: var(--sage);
+  --surface: #ffffff;
+  --surface-2: var(--sand);
+  /* A third step, barely off the surface: table headings and resting panels
+     need to read as "not the page, not a card" without another border. */
+  --surface-3: var(--cream);
+  --border: #d5dcc3;
+  --border-strong: #b6c09c;
+  --text: #472a2b;
+  --text-muted: #7a6566;
+  --accent: var(--blue);
+  --accent-text: #ffffff;
+  --accent-soft: #dde7f7;
+  --accent-line: var(--lime);
+  --band: var(--olive);
+  --band-ink: #fbfaf4;
+  --ok: var(--olive-deep);
+  --ok-soft: #e8eed2;
+  --warn: #8a5a10;
+  --warn-soft: #f7ecd9;
+  --danger: #a8322a;
+  --danger-soft: #f6e3e1;
+  --shadow: 0 1px 2px rgba(71,42,43,.07);
+  --lift: 0 4px 4px rgba(46,28,35,.25);
+  --lift-hover: 0 6px 8px rgba(46,28,35,.22);
+  --shadow-pop: 0 18px 48px rgba(46,28,35,.22), 0 2px 6px rgba(46,28,35,.10);
 }
 
 * { box-sizing: border-box; }
@@ -65,12 +204,16 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font: 15px/1.55 var(--body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-h1, h2, h3 { line-height: 1.25; letter-spacing: -.012em; font-weight: 650; }
+/* Manrope, light and wide-set, is the school's heading voice. It is a
+   display face: it earns its keep at a page title and loses it at
+   thirteen pixels, so the small uppercase labels stay in Fira Sans. */
+h1, h2, h3 { font-family: var(--head); line-height: 1.22; letter-spacing: -.03em; font-weight: 300; }
+h3 { font-weight: 400; letter-spacing: -.01em; }
 a { color: var(--accent); }
 
 /* Figures that sit in a column — a table, a tally, a date — line up only if
@@ -87,8 +230,9 @@ a { color: var(--accent); }
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--band);
+  color: var(--band-ink);
+  border-bottom: 1px solid rgba(46,28,35,.14);
 }
 
 .topbar-main {
@@ -112,6 +256,14 @@ a { color: var(--accent); }
 .topbar-main .brand { margin-right: auto; }
 .brand > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brand-mark { width: 22px; height: 22px; border-radius: 5px; display: block; flex: none; }
+/* The mark's own tile is the school's olive, which disappears on the olive
+   band. A cream surround gives it back its edge — box-sizing keeps the whole
+   badge 22px, so the drawing shrinks into the frame rather than growing. */
+.topbar-main .brand-mark, .k-bar .brand-mark {
+  padding: 2px;
+  background: var(--band-ink);
+  border-radius: 7px;
+}
 
 /* Underlined rather than pilled. A pill looks like a button that can be
    pressed anywhere; an underline says "this is the page you are on". */
@@ -128,12 +280,12 @@ a { color: var(--accent); }
 .tab {
   appearance: none;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: 3px solid transparent;
   background: none;
-  color: var(--text-muted);
+  color: rgba(251,250,244,.78);
   font: inherit;
   font-size: 14px;
-  font-weight: 550;
+  font-weight: 500;
   height: 40px;
   padding: 0 1px;
   margin-right: 24px;
@@ -143,8 +295,13 @@ a { color: var(--accent); }
   cursor: pointer;
 }
 .tab:last-of-type { margin-right: 0; }
-.tab:hover { color: var(--text); }
-.tab.active { color: var(--text); border-bottom-color: var(--accent-line); }
+.tab:hover { color: var(--band-ink); }
+.tab.active { color: var(--band-ink); font-weight: 600; border-bottom-color: var(--accent-line); }
+
+/* On the band nothing else is blue, so the focus ring is the cream. The
+   element selector is there to outrank the shared .tab:focus-visible rule
+   a few lines below. */
+.topbar button:focus-visible { outline: 2px solid var(--band-ink); outline-offset: 2px; }
 .tab:focus-visible, .btn:focus-visible, .chip:focus-visible, .link:focus-visible, .pick:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -156,8 +313,8 @@ a { color: var(--accent); }
   padding: 0 5px;
   margin-left: 5px;
   border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-text);
+  background: var(--band-ink);
+  color: var(--olive-deep);
   font-size: 10.5px;
   line-height: 16px;
   font-weight: 700;
@@ -169,9 +326,9 @@ a { color: var(--accent); }
 
 .sync-pill {
   appearance: none;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text-muted);
+  border: 1px solid rgba(251,250,244,.3);
+  background: rgba(251,250,244,.14);
+  color: var(--band-ink);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -192,36 +349,46 @@ a { color: var(--accent); }
 .sync-pill::before { position: absolute; left: 10px; top: 50%; margin-top: -3.5px; }
 .sync-pill.ok::before, .sync-dot.ok { background: var(--ok); }
 .sync-pill.busy::before, .sync-dot.busy { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
-.sync-pill.warn, .sync-pill.error { color: var(--text); }
+.sync-pill.warn, .sync-pill.error { color: var(--band-ink); }
+.sync-pill.error { background: rgba(168,50,42,.85); }
 .sync-pill.warn::before, .sync-dot.warn { background: var(--warn); }
-.sync-pill.error { border-color: var(--danger); }
-.sync-pill.error::before, .sync-dot.error { background: var(--danger); }
+.sync-pill.error { border-color: rgba(251,250,244,.5); }
+.sync-pill.error::before, .sync-dot.error { background: #ffd9d5; }
 @keyframes pulse { 50% { opacity: .3; } }
 .sync-line { font-size: 14px; margin: 6px 0 0; }
+/* Off the band — in Settings — the same pill has to work on a white card. */
+.view .sync-pill, .k-bar .sync-pill {
+  border-color: var(--border);
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+.view .sync-pill.warn, .view .sync-pill.error { color: var(--text); background: var(--surface-3); }
+.view .sync-pill.error { border-color: var(--danger); }
+.view .sync-pill.error::before { background: var(--danger); }
 .who {
   appearance: none;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(251,250,244,.3);
   background: none;
-  color: var(--text-muted);
+  color: rgba(251,250,244,.85);
   font: inherit;
   font-size: 12px;
   padding: 3px 10px;
   border-radius: 999px;
   cursor: pointer;
 }
-.who:hover { color: var(--text); border-color: var(--border-strong); }
+.who:hover { color: var(--band-ink); border-color: var(--band-ink); }
 /* The first thing anyone sees. One panel, the library's own mark above its
    own name, and nothing else on the page to look at. */
 .sign-in { max-width: 400px; margin: 8vh auto 0; }
 .sign-in-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: var(--shadow);
   padding: 26px 26px 24px;
 }
 .sign-in-mark { display: block; width: 34px; height: 34px; border-radius: 8px; margin-bottom: 14px; }
-.sign-in h2 { margin: 0 0 2px; font-size: 20px; letter-spacing: -.02em; }
+.sign-in h2 { margin: 0 0 2px; font-size: 24px; font-weight: 300; letter-spacing: -.035em; }
 .sign-in form > p:first-child { margin: 0 0 18px; font-size: 14px; color: var(--text-muted); }
 .sign-in form > p:first-child strong { color: var(--text); }
 .sign-in .actions { margin-top: 18px; }
@@ -265,12 +432,13 @@ code { font-family: var(--mono); font-size: .92em; background: var(--surface-2);
   margin-bottom: 22px;
   border-bottom: 1px solid var(--border);
 }
-.page-head h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.022em; }
+.page-head h1 { margin: 0; font-size: 27px; font-weight: 300; letter-spacing: -.035em; }
 .page-sub { margin: 5px 0 0; font-size: 13px; color: var(--text-muted); }
 .page-sub .danger { font-weight: 650; }
 .page-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 .section-title {
+  font-family: var(--body);
   font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: .07em;
@@ -285,12 +453,12 @@ code { font-family: var(--mono); font-size: .92em; background: var(--surface-2);
 /* A button sharing a line with a heading is a smaller thing than one in a row
    of its own, and needs an edge to be read as a button at all. */
 .section-title .btn { padding: 4px 10px; font-size: 12.5px; }
-.section-title .btn-quiet { border-color: var(--border); }
+.section-title .btn-quiet { box-shadow: inset 0 0 0 1px var(--border); }
 
 /* A quiet button is quiet because something louder is beside it. On its own,
    or in a strip of controls, it still has to look pressable. */
-.toolbar .btn-quiet { border-color: var(--border); }
-.actions > .btn-quiet:only-child { border-color: var(--border-strong); color: var(--text); }
+.toolbar .btn-quiet { box-shadow: inset 0 0 0 1px var(--border); }
+.actions > .btn-quiet:only-child { box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--text); }
 
 /* ---------------- circulation desk ---------------- */
 
@@ -301,7 +469,8 @@ code { font-family: var(--mono); font-size: .92em; background: var(--surface-2);
 .desk { display: grid; gap: 30px; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 980px) {
   .desk { grid-template-columns: minmax(0, 1fr) 290px; align-items: start; }
-  .desk-side { position: sticky; top: 118px; }
+  /* Clears the band: 52px of title bar plus a 40px tab strip, and a little air. */
+  .desk-side { position: sticky; top: 108px; }
 }
 .desk-side { display: flex; flex-direction: column; gap: 24px; }
 .desk-side .recent { max-width: none; margin: 0; }
@@ -372,10 +541,10 @@ code { font-family: var(--mono); font-size: .92em; background: var(--surface-2);
   padding: 20px;
 }
 .card-danger { border-color: var(--danger); }
-.card-title { margin: 0 0 12px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+.card-title { font-family: var(--body); margin: 0 0 12px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
 
 .item-head { display: flex; gap: 16px; align-items: flex-start; }
-.item-title { margin: 0 0 2px; font-size: 19px; letter-spacing: -.018em; }
+.item-title { margin: 0 0 2px; font-size: 20px; font-weight: 400; letter-spacing: -.028em; }
 .item-sub { margin: 0; color: var(--text-muted); }
 .item-meta { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
 
@@ -415,6 +584,7 @@ code { font-family: var(--mono); font-size: .92em; background: var(--surface-2);
 
 .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
 
+/* The school's button: a 100px pill lifted off the page. */
 .btn {
   appearance: none;
   display: inline-flex;
@@ -423,23 +593,28 @@ code { font-family: var(--mono); font-size: .92em; background: var(--surface-2);
   gap: 6px;
   font: inherit;
   font-size: 14px;
-  font-weight: 550;
+  font-weight: 500;
   line-height: 1.3;
-  padding: 7px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
+  padding: 8px 18px;
+  border-radius: var(--pill);
+  border: 0;
   background: var(--surface);
   color: var(--text);
+  box-shadow: var(--lift);
   white-space: nowrap;
   cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
 }
-.btn:hover:not(:disabled) { background: var(--surface-2); }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-.btn-primary:hover:not(:disabled) { filter: brightness(1.1); background: var(--accent); }
-.btn-quiet { border-color: transparent; background: none; color: var(--text-muted); }
-.btn-quiet:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
-.btn-danger { border-color: var(--danger); color: var(--danger); background: none; }
+.btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--lift-hover); }
+.btn:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 2px rgba(46,28,35,.3); }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-primary { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+.btn-primary:hover:not(:disabled) { background: var(--blue-deep); }
+/* Quiet keeps its place in the hierarchy by giving up the lift, not by
+   giving up the shape. */
+.btn-quiet { background: none; color: var(--text-muted); box-shadow: none; }
+.btn-quiet:hover:not(:disabled) { background: var(--surface-2); color: var(--text); transform: none; box-shadow: none; }
+.btn-danger { color: var(--danger); background: var(--surface); }
 .btn-danger:hover:not(:disabled) { background: var(--danger-soft); }
 
 .link {
@@ -568,7 +743,7 @@ code { font-family: var(--mono); font-size: .92em; background: var(--surface-2);
   flex: 0 1 auto;
   min-width: 0;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--pill);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -590,7 +765,7 @@ code { font-family: var(--mono); font-size: .92em; background: var(--surface-2);
 .chip { flex: 0 0 auto; }
 .chip:first-child { border-left: 0; }
 .chip:hover:not(.active) { background: var(--surface-2); color: var(--text); }
-.chip.active { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
+.chip.active { background: var(--accent); color: var(--accent-text); font-weight: 600; }
 
 .table {
   width: 100%;
@@ -769,7 +944,7 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 #modal {
   border: 1px solid var(--border);
   padding: 0;
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--surface);
   color: var(--text);
   width: min(640px, calc(100vw - 32px));
@@ -785,7 +960,7 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
   padding: 15px 20px;
   border-bottom: 1px solid var(--border);
 }
-.modal-head h2 { margin: 0; font-size: 16px; letter-spacing: -.015em; }
+.modal-head h2 { margin: 0; font-size: 18px; font-weight: 400; letter-spacing: -.025em; }
 .modal-body { padding: 20px; max-height: 72vh; overflow: auto; }
 
 .icon-btn {
@@ -1057,8 +1232,19 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
      job is accepted, the printer clicks, it reports complete, and nothing comes out.
      Monaco, Courier New, Courier and Andale Mono were all tested on that printer and
      all come out. The generic `monospace` is deliberately last and preceded by tested
-     names, because on a Mac it resolves to Menlo and would bring the fault back. */
-  :root { --mono: Monaco, "Courier New", Courier, monospace; }
+     names, because on a Mac it resolves to Menlo and would bring the fault back.
+
+     Manrope and Fira Sans go the same way for the same reason: they are webfonts
+     this page downloaded, so a print job has to embed them, and that is exactly the
+     case that printer silently drops. Spine labels and overdue notices have to come
+     out of the machine, so printing falls back to faces already resident on the Mac.
+     The school's colours still print; only the typeface changes. */
+  :root {
+    --mono: Monaco, "Courier New", Courier, monospace;
+    --head: "Avenir Next", Helvetica, Arial, sans-serif;
+    --body: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  body { font-family: var(--body); }
   .topbar, .toasts, #modal { display: none !important; }
   .view { display: none !important; }
   .print-hint { max-width: 5in; }

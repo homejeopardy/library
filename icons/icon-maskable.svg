@@ -1,38 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"
      role="img" aria-label="Classroom Library">
   <title>Classroom Library</title>
-  <!-- Books standing on a shelf, in the app's own green. Solid shapes rather
+  <!-- Books standing on a shelf, in the school's olive, blue and lime. Solid shapes rather
        than the thin line work of the genre icons: this has to read at about
        sixty pixels on a home screen, where a 2px stroke disappears.
 
        Two versions of the same drawing. This one leaves a wide margin, because Android may crop an icon to a circle or a squircle and
        anything outside the middle 80% can be cut away. Both are written by
        dev/build_icons.py from the art below — edit there, not here. -->
-  <rect width="512" height="512" fill="#1f5f4f"/>
+  <rect width="512" height="512" fill="#8c9a4b"/>
   <g transform="translate(256 286) scale(0.92) translate(-256 -286)">
   <!-- shelf -->
-    <rect x="112" y="366" width="288" height="20" rx="7" fill="#0e3b30"/>
-    <rect x="134" y="386" width="22" height="34" rx="6" fill="#0e3b30"/>
-    <rect x="356" y="386" width="22" height="34" rx="6" fill="#0e3b30"/>
+    <rect x="112" y="366" width="288" height="20" rx="7" fill="#5f6b2c"/>
+    <rect x="134" y="386" width="22" height="34" rx="6" fill="#5f6b2c"/>
+    <rect x="356" y="386" width="22" height="34" rx="6" fill="#5f6b2c"/>
   
     <!-- three upright books -->
-    <rect x="146" y="186" width="52" height="180" rx="9" fill="#f4f1e8"/>
-    <rect x="146" y="226" width="52" height="12" fill="#1f5f4f" opacity=".5"/>
-    <rect x="146" y="318" width="52" height="12" fill="#1f5f4f" opacity=".5"/>
+    <rect x="146" y="186" width="52" height="180" rx="9" fill="#f3f0e5"/>
+    <rect x="146" y="226" width="52" height="12" fill="#8c9a4b" opacity=".5"/>
+    <rect x="146" y="318" width="52" height="12" fill="#8c9a4b" opacity=".5"/>
   
-    <rect x="206" y="152" width="52" height="214" rx="9" fill="#d9a441"/>
-    <rect x="206" y="196" width="52" height="12" fill="#8a5a10" opacity=".55"/>
-    <rect x="206" y="318" width="52" height="12" fill="#8a5a10" opacity=".55"/>
+    <rect x="206" y="152" width="52" height="214" rx="9" fill="#3367b5"/>
+    <rect x="206" y="196" width="52" height="12" fill="#28549a" opacity=".55"/>
+    <rect x="206" y="318" width="52" height="12" fill="#28549a" opacity=".55"/>
   
-    <rect x="266" y="204" width="52" height="162" rx="9" fill="#f4f1e8"/>
-    <rect x="266" y="240" width="52" height="12" fill="#1f5f4f" opacity=".5"/>
-    <rect x="266" y="318" width="52" height="12" fill="#1f5f4f" opacity=".5"/>
+    <rect x="266" y="204" width="52" height="162" rx="9" fill="#e3ddc8"/>
+    <rect x="266" y="240" width="52" height="12" fill="#8c9a4b" opacity=".5"/>
+    <rect x="266" y="318" width="52" height="12" fill="#8c9a4b" opacity=".5"/>
   
     <!-- one leaning against the rest, the way a shelf really looks -->
     <g transform="rotate(14 372 366)">
-      <rect x="326" y="212" width="50" height="154" rx="9" fill="#9ecfbb"/>
-      <rect x="326" y="248" width="50" height="11" fill="#1f5f4f" opacity=".45"/>
-      <rect x="326" y="322" width="50" height="11" fill="#1f5f4f" opacity=".45"/>
+      <rect x="326" y="212" width="50" height="154" rx="9" fill="#b8c86a"/>
+      <rect x="326" y="248" width="50" height="11" fill="#8c9a4b" opacity=".45"/>
+      <rect x="326" y="322" width="50" height="11" fill="#8c9a4b" opacity=".45"/>
     </g>
   </g>
 </svg>

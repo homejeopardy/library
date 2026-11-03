@@ -484,7 +484,8 @@ it prints a short note listing the buttons that do print.
 
 ### The font on paper
 
-Anything printed is set in **Monaco**, not the monospace face the app uses on screen.
+Anything printed is set in **Monaco**, **Helvetica** and **Avenir Next** — never in the
+faces the app uses on screen.
 **Menlo** embeds into a print job in a way at least one printer cannot rasterise: it
 accepts the job, clicks, reports it **complete**, and produces nothing. It fails the
 same way from any app, because the font travels inside the document — a PDF saved from
@@ -493,10 +494,22 @@ the app would not print from Preview either.
 Monaco, Courier New, Courier and Andale Mono were each tested on that printer and all
 come out, so the fault is Menlo in particular rather than monospace in general.
 
-The swap is one line in the print rules:
+Manrope and Fira Sans are kept off paper for the same reason. They are webfonts this
+page downloaded, so a print job has to embed them — which is exactly the case that
+printer drops. Spine labels and overdue notices have to come out of the machine, so
+printing falls back to faces already on the Mac. The school's colours still print; only
+the typeface changes.
+
+The swap is one rule in the print styles:
 
 ```css
-@media print { :root { --mono: Monaco, "Courier New", Courier, monospace; } }
+@media print {
+  :root {
+    --mono: Monaco, "Courier New", Courier, monospace;
+    --head: "Avenir Next", Helvetica, Arial, sans-serif;
+    --body: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+}
 ```
 
 The generic `monospace` is last, and only after names known to print, because on a Mac
@@ -765,12 +778,49 @@ the table above. Wherever a book's genre name changes, the old name is kept as a
 (a mystery lands in Realistic Fiction tagged "Mystery"), so searching for it still works.
 A genre someone invented has no known home, so it's cleared and kept as a tag instead.
 
+## The look
+
+The app wears **Black Pine Circle's** colours, the same ones the yearbook help desk
+uses: the olive header band, plum, cream, sand, lime and the school blue. Every one of
+them is a token at the top of `styles.css`, so changing the school's green changes it
+everywhere at once.
+
+**It is dark by default.** That is the app's own look rather than a night mode the
+system turns on — opening it on a Mac set to Light still gives you the dark plum page.
+The daylight palette (sage page, white cards) is still in the stylesheet and still
+maintained; one attribute brings it back:
+
+```html
+<html lang="en" data-role="admin" data-theme="light">
+```
+
+Headings are **Manrope** at its lightest weight, body text is **Fira Sans**, and
+anything in a fixed pitch — barcodes, call numbers, the scan box — is **Fira Mono**.
+Small uppercase labels stay in Fira Sans, because Manrope is a display face that stops
+being readable below about fourteen pixels.
+
+### Why the fonts live in this repository
+
+`fonts/` holds ten `.woff2` files, about 230 KB in all. They could have been linked from
+Google's servers in one line instead, and that is what the yearbook desk does — but this
+app has to work at the shelf with no signal, and the service worker only caches what
+comes from our own origin. A webfont fetched from `fonts.gstatic.com` would quietly drop
+back to the system face every time the Wi-Fi did.
+
+The `?v=1` on each font URL is what makes the service worker treat them as permanent.
+Bump it only if a font file itself is replaced — not on an ordinary release.
+
+Manrope is a variable font, so one file per character set covers every weight; Fira Sans
+is not, so it has one file per weight.
+
 ## Files
 
 ```
 index.html          admin page
 student/index.html  student page
-styles.css          all styling; light and dark
+styles.css          all styling; the school's colours and type live at the top
+fonts/              Manrope, Fira Sans and Fira Mono, served from here so the app
+                    keeps its typeface with no network
 kiosk.css           student-page layout (big type, big targets)
 js/config.js        which GitHub repository holds the shared data
 js/util.js          dates, formatting, CSV, toasts
