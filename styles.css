@@ -1276,6 +1276,13 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 /* The sentence about it going away gets a line of its own, rather than a column
    squeezed in beside the password it is about. */
 .person-temp .small { color: var(--text-muted); flex: 1 1 100%; }
+/* The code sits inside the same panel as the password it carries, because it is
+   the same secret in a different shape. White behind it whatever the page is
+   doing: a camera reading a dark QR code is a camera that doesn't. */
+.temp-qr { flex: 1 1 100%; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.temp-qr .qr { padding: 10px; }
+.temp-qr .qr svg { width: 148px; height: 148px; }
+.temp-qr .small { flex: 1 1 15em; margin: 0; }
 
 .person-can { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 2px 18px; margin-top: 10px; }
 .tick { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: start; padding: 6px 0; }

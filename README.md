@@ -422,6 +422,23 @@ Returning a book at the station answers "where does this go?" in large type: the
 the genre and its picture, and where the shelf is. Scanning a book that is already checked
 in says the same thing, so a student holding a stray can put it away without asking.
 
+## Finding a book at the station
+
+Under the box students scan into is **Find a book**. It answers while the letters are going
+in, because a child who has to finish a word and press Enter before anything happens will
+decide the library doesn't have it. It matches on title, author, genre and tags, and each
+result says the only two things worth knowing: whether it is **on the shelf** — with the
+shelf code and the genre to look under — or when it is due back, with **Get in line** beside
+it. Nothing matching offers **Ask for this book**, which puts it on the requests list.
+
+Searching works before anyone signs in, so a student can look without giving their name;
+getting in line is the one thing that asks who they are first.
+
+The box above it is still the one that matters, and a scanner typing into the search bar by
+accident is no trouble: a barcode or a library card entered there goes where it was always
+going — checking a book out, returning it, or signing that student in — because searching
+for a book you are holding is never the point.
+
 ### Stocktake
 
 The top of the Shelves tab says how many of your books are on a shelf, as a count and a bar.
@@ -653,6 +670,24 @@ To add somebody: type their name, and the app generates a **temporary password**
 it. Press **Add**, read them the password — it is shown on their row until the page is
 reloaded, and stored nowhere — and the first time they sign in with it the app stops them
 there and makes them pick their own. Their row says **Waiting to sign in** until they do.
+
+### Signing in on another device, without typing
+
+Beside the temporary password is **QR code**. Point the other device's camera at it and it
+opens the library there, signs that person in, and goes straight to picking their own
+password. Nothing is typed, and the device needs to hold nothing beforehand — a brand-new
+iPad, a laptop at home. The account's own locked copy of the access key is what opens the
+library, so **no key is in the code**: it is worth exactly as much as the temporary
+password inside it, and stops working the moment that password is traded in.
+
+The name and password ride in the part of the address after the `#`, which a browser never
+sends to a server. The page reads it once, wipes it out of the address bar and the history
+entry before anything else runs, and spends it. Show the code to the person it belongs to,
+the way you would read the password out, and not to the room.
+
+This is a different thing from **Set up another device** under *Sync across devices*, which
+also offers a QR code: that one carries the **access key** and sets a device up as itself —
+it is how the student station is paired. The sign-in code is for a person.
 
 **Reset password** issues a fresh temporary password the same way, which is the answer
 when somebody forgets theirs. It keeps the person and their ticks exactly where they

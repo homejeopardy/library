@@ -189,6 +189,40 @@ body.kiosk { font-size: 17px; }
 }
 .staff-link:hover { color: var(--band-ink); background: rgba(251,250,244,.16); }
 
+/* ---------------- finding a book ---------------- */
+
+.k-find { margin-top: 22px; text-align: left; }
+.k-find-head {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+/* Smaller than the box above it on purpose: that one is the thing you came to
+   the station to use, this one is the thing you try when it didn't work. */
+.k-input-find { font-size: 18px; padding: 14px 46px 14px 16px; border-width: 1px; }
+.k-find-clear {
+  position: absolute;
+  right: 6px; top: 50%; transform: translateY(-50%);
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 22px; line-height: 1;
+  color: var(--text-muted);
+  background: none; border: 0; border-radius: 50%;
+  cursor: pointer;
+}
+.k-find-clear:hover { background: var(--surface-2); color: var(--text); }
+
+.k-found { margin-top: 8px; }
+.k-found .k-list li { padding: 10px 2px; }
+.k-found .btn { flex: none; padding: 9px 14px; font-size: 14px; }
+.k-found .actions { margin-top: 10px; }
+.k-in { color: var(--ok); }
+.k-found-none { margin: 10px 2px 0; color: var(--text-muted); }
+.k-found-more { margin: 8px 2px 0; font-size: 13px; color: var(--text-muted); }
+
 /* ---------------- browsing the shelves ---------------- */
 
 .k-browse { margin-top: 22px; }

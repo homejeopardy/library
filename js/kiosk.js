@@ -9,7 +9,7 @@
    --------------------------------------------------------------- */
 
 const IDLE_SECONDS = 90;
-const K = { student: null, result: null, idle: null };
+const K = { student: null, result: null, idle: null, find: '' };
 const main = document.getElementById('kiosk');
 
 /* ------------------------------ screens ------------------------------ */
@@ -103,10 +103,12 @@ function screenWelcome() {
       <ul id="k-suggest" class="k-suggest" role="listbox" hidden></ul>
     </div>
     <div id="k-result">${resultHTML()}</div>
+    ${searchBarHTML()}
     ${genreTilesHTML()}
   </section>`;
   const input = document.getElementById('k-input');
   wireNameBox(input);
+  wireFind();
   wireBrowse();
   input.focus();
 }
@@ -150,7 +152,7 @@ function showGenre(genre) {
       ${read.has(p.item.id) ? '<span class="muted">you have read this</span>' : ''}
       ${p.item.shelfId && shelfById(p.item.shelfId) ? `<span class="muted">Shelf <strong>${esc(shelfById(p.item.shelfId).code)}</strong></span>` : ''}
     </span></li>`).join('')}</ul>
-    ${picks.length > 12 ? `<p class="muted">…and ${picks.length - 12} more. Type a title above to find one.</p>` : ''}`);
+    ${picks.length > 12 ? `<p class="muted">…and ${picks.length - 12} more. Use <strong>Find a book</strong> below to look for one.</p>` : ''}`);
 }
 
 function askForBook() {
@@ -195,6 +197,7 @@ function screenStudent() {
              placeholder="Scan a book — or type a title to find one" aria-label="Scan a book, or type a title to find one">
     </div>
     <div id="k-result">${resultHTML()}</div>
+    ${searchBarHTML()}
     ${genreTilesHTML()}
     <div class="k-columns">
       <section>
@@ -233,6 +236,7 @@ function screenStudent() {
     input.value = '';
     if (v) studentScan(v);
   });
+  wireFind();
   wireBrowse();
   main.querySelectorAll('[data-renew]').forEach(b => b.addEventListener('click', () => {
     const res = renew(b.dataset.renew);
@@ -491,6 +495,7 @@ function signIn(patron, isNew) {
 function signOut() {
   K.student = null;
   K.result = null;
+  K.find = '';
   kRender();
 }
 
@@ -569,36 +574,153 @@ function doHold(item) {
   kRender();
 }
 
-function showSearch(q) {
-  const me = K.student;
-  const found = searchItems(q).slice(0, 8);
-  if (!found.length) { showResult('info', `No books match “${esc(q)}”. Try part of the title or the author's name.`); return; }
-  const rows = found.map(it => {
-    const loan = activeLoanForItem(it.id);
-    const mineOut = loan && loan.patronId === me.id;
-    const inLine = holdsForItem(it.id).findIndex(h => h.patronId === me.id) + 1;
-    const rating = itemRating(it.id);
-    let status, action = '';
-    if (it.status) status = 'Not on the shelf right now';
-    else if (mineOut) status = 'You have this one';
-    else if (!loan) {
-      const shelf = it.shelfId && typeof shelfById === 'function' ? shelfById(it.shelfId) : null;
-      status = 'On the shelf' + (it.genre ? ` — look in <strong>${esc(it.genre)}</strong> ${genreArt(it.genre, 15)}` : '')
-        + (shelf ? ` <span class="mono">${esc(shelf.code)}</span>` : '');
+/* ---------------------------------------------------------------
+   Finding a book.
+
+   The box at the top of the screen is for scanning and for names; this
+   one is for looking. It answers as the letters go in, because a child
+   who has to finish a word and press Enter before anything happens will
+   decide the library doesn't have it.
+
+   A scanner types into whichever box has the cursor and finishes with
+   Enter, so a barcode landing in here is sent where it was going
+   anyway — searching for a book you are holding is never the point.
+   --------------------------------------------------------------- */
+
+function searchBarHTML() {
+  if (!DB.items.length) return '';
+  return `<div class="k-find">
+    <span class="k-find-head">Find a book</span>
+    <div class="k-box">
+      <input id="k-find" class="k-input k-input-find" autocomplete="off" spellcheck="false"
+             placeholder="Title, author, or what it's about"
+             aria-label="Find a book by title, author or kind">
+      <button type="button" class="k-find-clear" id="k-find-clear" hidden aria-label="Clear">&times;</button>
+    </div>
+    <div id="k-found" class="k-found" aria-live="polite"></div>
+  </div>`;
+}
+
+function wireFind() {
+  const input = document.getElementById('k-find');
+  if (!input) return;
+  const clear = document.getElementById('k-find-clear');
+  const show = () => { clear.hidden = !input.value; };
+  const run = debounce(() => drawFound(input.value), 120);
+
+  input.addEventListener('input', () => { show(); run(); });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { input.value = ''; show(); drawFound(''); return; }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const v = input.value.trim();
+    if (!v) return;
+    if (findItemByCode(v) || findPatronByCode(v) || looksScanned(v) || looksLikeCard(v)) {
+      input.value = ''; show(); drawFound('');
+      scanFromAnywhere(v);
+      return;
     }
-    else if (inLine) status = `Checked out · you're number ${inLine} in line`;
-    else {
-      status = 'Checked out · ' + (isOverdue(loan) ? 'should be back soon' : 'back ' + esc(fmtDate(loan.dueAt)));
-      action = `<button class="btn" data-hold-item="${it.id}">Get in line</button>`;
-    }
-    return `<li>${coverImg(it)}<span class="k-list-text"><strong>${esc(it.title)}</strong>
-      <span class="muted">${esc(it.author || '')}</span>
-      ${rating ? `<span class="k-rating">${starsHTML(rating.avg)} <span class="muted">${rating.avg.toFixed(1)} from ${plural(rating.count, 'reader')}</span></span>` : ''}
-      <span>${status}</span></span>${action}</li>`;
-  }).join('');
-  showResult('plain', `<ul class="k-list">${rows}</ul>`, '', box => {
-    box.querySelectorAll('[data-hold-item]').forEach(b => b.addEventListener('click', () => doHold(itemById(b.dataset.holdItem))));
+    drawFound(v);                       // typed in full and pressed Enter before the pause
   });
+  clear.addEventListener('click', () => { input.value = ''; show(); drawFound(''); input.focus(); });
+
+  /* A redraw — another device's changes arriving, or signing in — rebuilds the
+     screen, so the search that was on it has to be put back. */
+  if (K.find) { input.value = K.find; show(); drawFound(K.find); }
+}
+
+/* Something with a barcode on it, typed into the wrong box. */
+function scanFromAnywhere(v) {
+  if (K.student) { studentScan(v); return; }
+  const item = findItemByCode(v);
+  if (item) { returnFromWelcome(item); return; }
+  const card = findPatronByCode(v);
+  if (card) { signIn(card); return; }
+  if (looksLikeCard(v)) { showResult('warn', NO_SUCH_CARD); return; }
+  showResult('warn', 'That book isn\'t in our library yet. Please give it to your teacher.');
+}
+
+const FOUND_SHOWN = 8;
+
+function drawFound(q) {
+  K.find = q;
+  const box = document.getElementById('k-found');
+  if (!box) return;
+  const query = q.trim();
+  /* One letter matches half the library and tells nobody anything. */
+  if (query.length < 2) { box.innerHTML = ''; return; }
+
+  const found = searchItems(query);
+  if (!found.length) {
+    box.innerHTML = `<p class="k-found-none">No book here matches <strong>${esc(query)}</strong>.
+        Try part of the title, or the author's name.</p>
+      <div class="actions"><button type="button" class="btn" data-ask="1">Ask for this book</button></div>`;
+    box.querySelector('[data-ask]').addEventListener('click', () => {
+      const res = addRequest(query, K.student ? K.student.id : null);
+      if (!res.ok) { toast(res.error, 'error'); return; }
+      box.innerHTML = `<p class="k-found-none">${res.seconded
+        ? `Someone had already asked for <strong>${esc(res.request.what)}</strong> — your name is on it too.`
+        : `Thanks! <strong>${esc(res.request.what)}</strong> is on the list for your teacher to see.`}</p>`;
+    });
+    return;
+  }
+
+  const shown = found.slice(0, FOUND_SHOWN);
+  box.innerHTML = `<ul class="k-list">${shown.map(foundRowHTML).join('')}</ul>
+    ${found.length > shown.length
+      ? `<p class="k-found-more">…and ${found.length - shown.length} more. Type a little more to narrow it down.</p>`
+      : ''}`;
+  box.querySelectorAll('[data-hold-item]').forEach(b => b.addEventListener('click', () => {
+    const item = itemById(b.dataset.holdItem);
+    if (!K.student) {
+      showResult('info', `Type your name in the box at the top first, then you can get in line for
+        <strong>${esc(item.title)}</strong>.`);
+      const top = document.getElementById('k-input');
+      if (top) { top.focus(); top.scrollIntoView({ block: 'center' }); }
+      return;
+    }
+    doHold(item);
+  }));
+}
+
+/* One book, and the only two things a student wants to know about it:
+   whether it is on the shelf, and where that shelf is. */
+function foundRowHTML(it) {
+  const me = K.student;
+  const loan = activeLoanForItem(it.id);
+  const mineOut = loan && me && loan.patronId === me.id;
+  const inLine = me ? holdsForItem(it.id).findIndex(h => h.patronId === me.id) + 1 : 0;
+  const rating = itemRating(it.id);
+  let status, action = '';
+  if (it.status) status = 'Not on the shelf right now';
+  else if (mineOut) status = 'You have this one';
+  else if (!loan) {
+    const shelf = it.shelfId && typeof shelfById === 'function' ? shelfById(it.shelfId) : null;
+    status = '<strong class="k-in">On the shelf</strong>' + (it.genre ? ` — look in ${esc(it.genre)} ${genreArt(it.genre, 15)}` : '')
+      + (shelf ? ` <span class="mono">${esc(shelf.code)}</span>` : '');
+  }
+  else if (inLine) status = `Checked out · you're number ${inLine} in line`;
+  else {
+    status = 'Checked out · ' + (isOverdue(loan) ? 'should be back soon' : 'back ' + esc(fmtDate(loan.dueAt)));
+    action = `<button class="btn" data-hold-item="${it.id}">Get in line</button>`;
+  }
+  return `<li>${coverImg(it)}<span class="k-list-text"><strong>${esc(it.title)}</strong>
+    <span class="muted">${esc(it.author || '')}</span>
+    ${rating ? `<span class="k-rating">${starsHTML(rating.avg)} <span class="muted">${rating.avg.toFixed(1)} from ${plural(rating.count, 'reader')}</span></span>` : ''}
+    <span>${status}</span></span>${action}</li>`;
+}
+
+/* A title typed into the scan box above lands here, in the one place on the
+   screen that answers that question — rather than in a second list that looks
+   almost but not quite the same. */
+function showSearch(q) {
+  const input = document.getElementById('k-find');
+  if (!input) { showResult('info', `No books match \u201c${esc(q)}\u201d.`); return; }
+  input.value = q;
+  const clear = document.getElementById('k-find-clear');
+  if (clear) clear.hidden = false;
+  drawFound(q);
+  input.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 let clearTimer = null;
@@ -716,7 +838,7 @@ main.addEventListener('focusout', () => setTimeout(() => {
 function poke() {
   clearTimeout(K.idle);
   K.idle = setTimeout(() => {
-    if (K.student || K.result) { K.student = null; K.result = null; kRender(); }
+    if (K.student || K.result || K.find) { K.student = null; K.result = null; K.find = ''; kRender(); }
   }, IDLE_SECONDS * 1000);
 }
 ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, poke, true));
@@ -726,6 +848,7 @@ document.getElementById('staff-link').addEventListener('click', () => openStaffG
 /* Keep the cursor in the box so a scan always lands somewhere. */
 document.addEventListener('click', e => {
   if (e.target.closest('button, a, input, select, textarea, label')) return;
+  if (e.target.closest('.k-find')) return;   // the search bar keeps its own cursor
   const input = document.getElementById('k-input');
   if (input) input.focus();
 });

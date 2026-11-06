@@ -20,6 +20,30 @@ const VIEWS = {};   // route -> HTML string
 const AFTER = {};   // route -> post-render wiring
 const ACTIONS = {}; // data-act name -> handler
 
+/* ---------------------------------------------------------------
+   A sign-in handed over by a QR code.
+
+   It carries a name and the temporary password that goes with it, in
+   the fragment — the part of a URL a browser never sends to a server.
+   It is read once, wiped out of the address bar and the history entry
+   before anything else runs, and spent the moment the person picks a
+   password of their own.
+
+   This is for a device that holds nothing: a new iPad, a teacher's
+   laptop at home. The account's own locked copy of the key is what
+   opens the library, which is why no key is in the code.
+   --------------------------------------------------------------- */
+function readSignInLink() {
+  const m = (location.hash || '').match(/[#&]signin=([^&]+)/);
+  if (!m) return null;
+  let data = null;
+  try { data = JSON.parse(decodeURIComponent(m[1])); } catch (e) { data = null; }
+  const rest = location.hash.replace(/[#&]signin=[^&]*/, '');
+  history.replaceState(null, '', location.pathname + location.search + (rest && rest !== '#' ? rest : ''));
+  return data && data.u && data.p ? data : null;
+}
+const signInLink = readSignInLink();
+
 const ROUTES = ['circulation', 'catalog', 'shelves', 'patrons', 'holds', 'reports', 'settings'];
 let route = (location.hash || '').replace('#', '') || 'circulation';
 if (!ROUTES.includes(route)) route = 'circulation';
@@ -38,6 +62,10 @@ function go(next) {
 }
 
 window.addEventListener('hashchange', () => {
+  /* Pasted into a tab that is already open: changing only the fragment never
+     reloads the page, so nothing would happen at all without this. */
+  const handed = readSignInLink();
+  if (handed) { signInFromLink(handed); return; }
   const next = (location.hash || '').replace('#', '') || 'circulation';
   if (next !== route) { route = ROUTES.includes(next) ? next : 'circulation'; render(); }
 });
@@ -107,7 +135,7 @@ const NEEDS = {
 
   /* Choosing light or dark needs nothing: it is this device's own screen. */
   'account-add': 'accounts', 'account-reset': 'accounts', 'account-can': 'accounts',
-  'account-remove': 'accounts', 'account-reroll': 'accounts', 'account-copy-temp': 'accounts',
+  'account-remove': 'accounts', 'account-reroll': 'accounts', 'account-copy-temp': 'accounts', 'account-qr': 'accounts',
   'sync-connect': 'accounts', 'sync-disconnect': 'accounts',
   'pair-show': 'accounts', 'pair-copy': 'accounts', 'pair-qr': 'accounts', 'pair-file': 'accounts',
 
@@ -442,6 +470,9 @@ const Auth = (function () {
         : 'You are not set up to do that.';
     },
     signIn: (name, list) => { set(ME, name); set(CAN, list ? JSON.stringify(list) : null); render(); },
+    /* Clears who is signed in without redrawing or sending anyone anywhere: for the
+       moment a second person arrives on this device and the screen is mid-change. */
+    forget: () => { set(ME, null); set(TEMP, null); set(CAN, null); },
     signOut: () => {
       const wasTemporary = temporary();
       set(ME, null); set(TEMP, null); set(CAN, null);
@@ -478,6 +509,8 @@ function renderSignIn() {
         <button type="submit" class="btn btn-primary">Sign in</button>
         <button type="button" class="btn btn-quiet" data-gate="name">Back</button>
       </div>`,
+    link: `<p>Signing <strong>${esc(g.name)}</strong> in…</p>
+      <p class="hint">Opening the library on this device. This takes a few seconds the first time.</p>`,
     renew: `<p>That was a temporary password. Pick your own now, <strong>${esc(g.name)}</strong> — it is the one you'll use with your name from here on, and nobody else ever sees it.</p>
       <input class="sr-only" type="text" name="username" value="${esc(g.name)}" autocomplete="username" readonly tabindex="-1" aria-hidden="true">
       <div class="grid-2">
@@ -531,8 +564,43 @@ function renderSignIn() {
     const to = e.target.dataset && e.target.dataset.gate;
     if (to) { gate = { step: to, name: gate.name, account: gate.account, error: '' }; renderSignIn(); }
   });
+  if (g.step === 'link') return;   // nothing to press yet, and nothing to focus
   const first = form.querySelector('input:not([readonly])');
   if (first) first.focus();
+}
+
+/* Everything the password step does, with the password coming off the link
+   instead of a keyboard. It ends in the same place: a temporary password still
+   has to be traded for one of the person's own before the library opens. */
+async function signInFromLink(data) {
+  /* A link is somebody arriving. Whoever was signed in on this device isn't any
+     more — their session should not be sitting underneath a screen that is asking
+     a different person to pick a password. */
+  if (Auth.me() && Accounts.norm(Auth.me()) !== Accounts.norm(data.u)) Auth.forget();
+  gate = { step: 'link', name: data.u, account: null, error: '' };
+  render();
+  try {
+    const all = (await Accounts.load()).accounts;
+    Auth.noteAccounts(all);
+    const account = all.find(a => a.user === Accounts.norm(data.u));
+    if (!account) throw new Error('There is no account for ' + data.u + ' any more.');
+    const token = await Accounts.unlock(account, data.p);
+    const res = await Sync.connect(token);
+    if (res.next === 'ask') Sync.adopt(res.summary, 'merge');
+    await Sync.syncNow();
+    requestPersistence();
+    if (account.temp) {
+      gate = { step: 'renew', name: account.name, account: account, error: '' };
+      renderSignIn();
+      return;
+    }
+    Auth.signIn(account.name, account.can);
+  } catch (e) {
+    /* A code that has been used already, or is a week old and the password has
+       been reissued since. Say so, and leave them at the ordinary sign-in. */
+    gate = { step: 'name', name: data.u, account: null, error: e.message + ' Sign in with your password, or ask for a new code.' };
+    renderSignIn();
+  }
 }
 
 async function gateSubmit(form) {
@@ -675,6 +743,14 @@ async function connectWithKey(key, btn) {
   }
 }
 
+/* The address that signs somebody in on a device holding nothing at all. The
+   fragment is the one part of a URL a browser never sends to a server, which is
+   where the pairing link puts the access key for the same reason. */
+function signInURL(name, password) {
+  const base = location.origin + location.pathname.replace(/student\/$/, '');
+  return base + '#signin=' + encodeURIComponent(JSON.stringify({ u: name, p: password }));
+}
+
 /* The QR library is only needed on the setup panel, so it loads when asked
    for and the panel copes without it. */
 let qrLib = null;
@@ -758,7 +834,9 @@ function personHTML(account, list) {
         <span>Temporary password for <strong>${esc(account.name)}</strong>:</span>
         <code class="temp-pw">${esc(temp)}</code>
         <button class="btn btn-quiet" data-act="account-copy-temp" data-id="${esc(account.user)}">Copy</button>
+        <button class="btn btn-quiet" data-act="account-qr" data-id="${esc(account.user)}">QR code</button>
         <span class="small">They pick their own the first time they sign in. This disappears when the page is reloaded.</span>
+        <div class="temp-qr" hidden></div>
       </div>` : ''}
     ${can === null
       ? `<p class="hint">Set up before there were permissions, so this account can do everything.
@@ -2836,6 +2914,32 @@ shared drives and out of the hands of students.</p>
     }
   },
 
+  /* Point a phone or a new iPad at this and it opens the library, signs the person
+     in, and asks them for a password of their own — nothing typed, and no access
+     key in the code. It is worth exactly as much as the temporary password inside
+     it, which is to say: show it to the person it belongs to and nobody else. */
+  'account-qr': async (user, btn) => {
+    const password = shownTemps[Accounts.norm(user)];
+    const box = btn.closest('.person-temp').querySelector('.temp-qr');
+    if (!password) { toast('That password is no longer on screen. Issue another one.', 'error'); return; }
+    if (!box.hidden) { box.hidden = true; box.innerHTML = ''; return; }
+    const account = await Accounts.find(user);
+    box.hidden = false;
+    box.innerHTML = '<p class="small">Making the code…</p>';
+    try {
+      const qrcode = await loadQRLibrary();
+      const qr = qrcode(0, 'L');
+      qr.addData(signInURL((account && account.name) || user, password));
+      qr.make();
+      box.innerHTML = `<div class="qr">${qr.createSvgTag({ cellSize: 4, margin: 2 })}</div>
+        <p class="small">Point the other device's camera at this. It opens the library, signs
+          ${esc((account && account.name) || user)} in, and asks them to pick a password.
+          It stops working the moment they do.</p>`;
+    } catch (e) {
+      box.innerHTML = '<p class="small">The code needs internet to draw. Read the password out instead.</p>';
+    }
+  },
+
   /* Resetting no longer deletes the account, which would hand its name back to
      anyone who typed it. It re-locks the same key under a temporary password and
      keeps the person, and their ticks, exactly where they were. */
@@ -3608,3 +3712,6 @@ Scan.announce();
 
 /* Opened from a pairing link: set this computer up without anyone typing. */
 if (!Sync.configured() && Sync.handedOver()) connectWithKey(Sync.handedOver());
+
+/* Opened from a sign-in code: do what the person would have done by hand. */
+if (signInLink) signInFromLink(signInLink);
