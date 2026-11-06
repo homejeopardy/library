@@ -40,7 +40,7 @@ function readSignInLink() {
   try { data = JSON.parse(decodeURIComponent(m[1])); } catch (e) { data = null; }
   const rest = location.hash.replace(/[#&]signin=[^&]*/, '');
   history.replaceState(null, '', location.pathname + location.search + (rest && rest !== '#' ? rest : ''));
-  return data && data.u && data.p ? data : null;
+  return data && data.u && (data.h || data.p) ? data : null;
 }
 const signInLink = readSignInLink();
 
@@ -584,11 +584,24 @@ async function signInFromLink(data) {
     Auth.noteAccounts(all);
     const account = all.find(a => a.user === Accounts.norm(data.u));
     if (!account) throw new Error('There is no account for ' + data.u + ' any more.');
-    const token = await Accounts.unlock(account, data.p);
+    /* Two kinds of code. A one-time one, made on a device that is already signed
+       in, opens an account that already has a password and leaves it alone. A
+       temporary password is the other sort: a person who has never been in yet. */
+    const token = data.h
+      ? await Accounts.useHandoff(account, data.h)
+      : await Accounts.unlock(account, data.p);
     const res = await Sync.connect(token);
     if (res.next === 'ask') Sync.adopt(res.summary, 'merge');
     await Sync.syncNow();
     requestPersistence();
+    if (data.h) {
+      /* Spent. Wiping it is the whole of what makes it one-time, so it happens
+         before the library opens and a failure here is not swallowed. */
+      await Accounts.clearHandoff(account.user);
+      toast('Signed in as ' + account.name + ' on this device.', 'ok');
+      Auth.signIn(account.name, account.can);
+      return;
+    }
     if (account.temp) {
       gate = { step: 'renew', name: account.name, account: account, error: '' };
       renderSignIn();
@@ -596,9 +609,11 @@ async function signInFromLink(data) {
     }
     Auth.signIn(account.name, account.can);
   } catch (e) {
-    /* A code that has been used already, or is a week old and the password has
-       been reissued since. Say so, and leave them at the ordinary sign-in. */
-    gate = { step: 'name', name: data.u, account: null, error: e.message + ' Sign in with your password, or ask for a new code.' };
+    /* A code that has been used already, or a password reissued since it was made.
+       Say so and leave them at the ordinary sign-in — but don't tack advice onto a
+       message that already carries its own. */
+    const next = e.kind === 'handoff' ? '' : ' Sign in with your password, or ask for a new code.';
+    gate = { step: 'name', name: data.u, account: null, error: e.message + next };
     renderSignIn();
   }
 }
@@ -746,9 +761,11 @@ async function connectWithKey(key, btn) {
 /* The address that signs somebody in on a device holding nothing at all. The
    fragment is the one part of a URL a browser never sends to a server, which is
    where the pairing link puts the access key for the same reason. */
-function signInURL(name, password) {
+function signInURL(name, code, kind) {
   const base = location.origin + location.pathname.replace(/student\/$/, '');
-  return base + '#signin=' + encodeURIComponent(JSON.stringify({ u: name, p: password }));
+  const data = { u: name };
+  data[kind === 'password' ? 'p' : 'h'] = code;
+  return base + '#signin=' + encodeURIComponent(JSON.stringify(data));
 }
 
 /* The QR library is only needed on the setup panel, so it loads when asked
@@ -824,6 +841,7 @@ function personHTML(account, list) {
       ${account.temp ? '<span class="badge badge-warn">Waiting to sign in</span>' : ''}
       <span class="muted small">since ${esc(fmtDate(account.at))}</span>
       <span class="row-actions">
+        ${account.temp || me ? '' : `<button class="link" data-act="handoff-make" data-id="${esc(account.user)}">Open on another device</button>`}
         <button class="link" data-act="account-reset" data-id="${esc(account.user)}">${account.temp ? 'Another temporary password' : 'Reset password'}</button>
         ${lastWayIn ? '' : `<button class="link danger" data-act="account-remove" data-id="${esc(account.user)}">Remove</button>`}
       </span>
@@ -838,6 +856,7 @@ function personHTML(account, list) {
         <span class="small">They pick their own the first time they sign in. This disappears when the page is reloaded.</span>
         <div class="temp-qr" hidden></div>
       </div>` : ''}
+    ${me ? '' : `<div class="handoff-qr" data-for="${esc(account.user)}" hidden></div>`}
     ${can === null
       ? `<p class="hint">Set up before there were permissions, so this account can do everything.
            Tick the boxes to limit it.</p>` : ''}
@@ -2353,6 +2372,28 @@ function appearanceHTML() {
 }
 
 /* ---------------------------------------------------------------
+   Opening your own account on another device.
+
+   Every person can reach this, because it is about their own account
+   and the device in their hand — a new iPad, a laptop at home, the
+   machine in the other room. It needs no permission and no password:
+   this browser is already signed in, which is the proof.
+
+   The code is spent the moment it is used. Until then it is a way in,
+   so the screen says so rather than leaving it lying about.
+   --------------------------------------------------------------- */
+function deviceHandoffHTML() {
+  if (!Auth.me() || !Sync.configured()) return '';
+  return `<h2 class="section-title">Open your library on another device</h2>
+    <p class="hint">Make a code and point the other device's camera at it. The library opens there,
+      signed in as <strong>${esc(Auth.me())}</strong> — nothing typed, and that device needs nothing
+      beforehand. Your password is not in the code and is not needed; the code works once.</p>
+    <div class="actions"><button class="btn" data-act="handoff-make" data-id="${esc(Auth.me())}">Make a code</button></div>
+    <div class="handoff-qr" data-for="${esc(Accounts.norm(Auth.me()))}" hidden></div>
+`;
+}
+
+/* ---------------------------------------------------------------
    Adding somebody.
 
    A temporary password is generated rather than invented, because it
@@ -2507,6 +2548,7 @@ VIEWS.settings = function () {
     ${pageHead('Settings', 'How this library works, and who may change it', '')}
     ${installSectionHTML()}
     ${appearanceHTML()}
+    ${deviceHandoffHTML()}
     ${library}
     ${genres}
     ${advanced}
@@ -2914,6 +2956,55 @@ shared drives and out of the hands of students.</p>
     }
   },
 
+  /* A one-time code for an account that already exists. Your own needs nothing but
+     being signed in; somebody else's needs the permission that could reset their
+     password anyway, so it opens no door that was shut. */
+  'handoff-make': async (user, btn) => {
+    const self = Accounts.norm(user) === Accounts.norm(Auth.me() || '');
+    if (!self && !Auth.can('accounts')) { toast(Auth.refusal('account-can'), 'error'); return; }
+    if (!Sync.configured()) { toast('This computer is not connected, so it has no key to hand on.', 'error'); return; }
+    const box = document.querySelector('.handoff-qr[data-for="' + cssValue(Accounts.norm(user)) + '"]');
+    if (!box) return;
+    if (!box.hidden) { box.hidden = true; box.innerHTML = ''; return; }
+    btn.disabled = true;
+    box.hidden = false;
+    box.innerHTML = '<p class="small">Making the code…</p>';
+    try {
+      const account = await Accounts.find(user);
+      if (!account) throw new Error('There is no account for ' + user + ' any more.');
+      const code = await Accounts.makeHandoff(account.user, Sync.key(), Auth.me() || '');
+      const qrcode = await loadQRLibrary();
+      const qr = qrcode(0, 'L');
+      qr.addData(signInURL(account.name, code));
+      qr.make();
+      box.innerHTML = `<div class="qr">${qr.createSvgTag({ cellSize: 4, margin: 2 })}</div>
+        <div class="handoff-say">
+          <p>Point the other device's camera at this. It opens the library there, signed in as
+            <strong>${esc(account.name)}</strong>.</p>
+          <p class="small">It works once and then stops. Until it is used, anyone who can see it can sign in
+            as ${esc(account.name)} — so show it to the device, not to the room.</p>
+          <div class="actions"><button class="btn btn-quiet" data-act="handoff-stop" data-id="${esc(account.user)}">Stop this code</button></div>
+        </div>`;
+    } catch (e) {
+      box.innerHTML = `<p class="small danger">${esc(e.message)}</p>`;
+    } finally {
+      btn.disabled = false;
+    }
+  },
+
+  'handoff-stop': async (user, btn) => {
+    btn.disabled = true;
+    try {
+      await Accounts.clearHandoff(user);
+      const box = document.querySelector('.handoff-qr[data-for="' + cssValue(Accounts.norm(user)) + '"]');
+      if (box) { box.hidden = true; box.innerHTML = ''; }
+      toast('That code no longer works.', 'ok');
+    } catch (e) {
+      toast(e.message, 'error');
+      btn.disabled = false;
+    }
+  },
+
   /* Point a phone or a new iPad at this and it opens the library, signs the person
      in, and asks them for a password of their own — nothing typed, and no access
      key in the code. It is worth exactly as much as the temporary password inside
@@ -2929,7 +3020,7 @@ shared drives and out of the hands of students.</p>
     try {
       const qrcode = await loadQRLibrary();
       const qr = qrcode(0, 'L');
-      qr.addData(signInURL((account && account.name) || user, password));
+      qr.addData(signInURL((account && account.name) || user, password, 'password'));
       qr.make();
       box.innerHTML = `<div class="qr">${qr.createSvgTag({ cellSize: 4, margin: 2 })}</div>
         <p class="small">Point the other device's camera at this. It opens the library, signs

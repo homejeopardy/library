@@ -160,11 +160,66 @@ const Accounts = (function () {
       a.user === who ? Object.assign({}, a, { can: can.slice() }) : a));
   }
 
+  /* ---------------------------------------------------------------
+     Opening an account on a device that holds nothing.
+
+     The account is locked with a password nobody can look up, so there
+     is no way to put an existing account into a QR code. Instead a
+     device that is already signed in locks the same key a SECOND time,
+     with a code it makes up — and that code goes in the QR.
+
+     It is spent on first use and wiped from the file. The person's own
+     password is neither needed nor touched, and no access key is ever
+     in the code: what the code opens is a second locked copy, exactly
+     like every other one in this file.
+     --------------------------------------------------------------- */
+  async function makeHandoff(user, token, by) {
+    const code = tempPassword();
+    const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await keyFor(code, salt, ITERATIONS);
+    const box = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, enc.encode(JSON.stringify({ token: token })));
+    const who = norm(user);
+    const handoff = { salt: b64(salt), iv: b64(iv), box: b64(box), iter: ITERATIONS, at: new Date().toISOString() };
+    if (by) handoff.by = String(by).trim();
+    let found = false;
+    await change(list => list.map(a => {
+      if (a.user !== who) return a;
+      found = true;
+      return Object.assign({}, a, { handoff: handoff });
+    }));
+    if (!found) throw fail('missing', 'There is no account for ' + user + ' any more.');
+    return code;
+  }
+
+  async function useHandoff(account, code) {
+    const h = account && account.handoff;
+    if (!h) throw fail('handoff', 'That code has been used already. Make a new one on a device that is signed in.');
+    try {
+      const key = await keyFor(code, unb64(h.salt), h.iter);
+      const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(h.iv) }, key, unb64(h.box));
+      return JSON.parse(dec.decode(plain)).token;
+    } catch (e) {
+      throw fail('handoff', 'That code doesn\'t work any more. Make a new one.');
+    }
+  }
+
+  function clearHandoff(user) {
+    const who = norm(user);
+    return change(list => list.map(a => {
+      if (a.user !== who || !a.handoff) return a;
+      const copy = Object.assign({}, a);
+      delete copy.handoff;
+      return copy;
+    }));
+  }
+
   function remove(users) {
     const gone = [].concat(users).map(norm);
     return change(list => list.filter(a => !gone.includes(a.user)));
   }
 
   return { load: load, find: find, unlock: unlock, save: save, setAbilities: setAbilities,
-    remove: remove, norm: norm, repo: repo, tempPassword: tempPassword, MIN_PASSWORD: MIN_PASSWORD };
+    remove: remove, norm: norm, repo: repo, tempPassword: tempPassword,
+    makeHandoff: makeHandoff, useHandoff: useHandoff, clearHandoff: clearHandoff,
+    MIN_PASSWORD: MIN_PASSWORD };
 })();

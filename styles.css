@@ -1284,6 +1284,22 @@ button.genre-tag:hover { border-color: var(--accent); color: var(--accent); }
 .temp-qr .qr svg { width: 148px; height: 148px; }
 .temp-qr .small { flex: 1 1 15em; margin: 0; }
 
+/* A one-time code for a device that holds nothing. Same white square behind it:
+   a camera reading a dark QR code is a camera that doesn't. */
+.handoff-qr {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin: 12px 0 4px; padding: 14px 15px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface);
+}
+.handoff-qr .qr { padding: 10px; }
+.handoff-qr .qr svg { width: 160px; height: 160px; }
+.handoff-say { flex: 1 1 16em; min-width: 0; }
+.handoff-say p { margin: 0 0 6px; }
+.handoff-say .small { color: var(--text-muted); }
+.handoff-say .actions { margin-top: 10px; }
+.handoff-say .btn { padding: 6px 13px; font-size: 13px; }
+
 .person-can { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 2px 18px; margin-top: 10px; }
 .tick { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: start; padding: 6px 0; }
 .tick input { margin: 2px 0 0; }

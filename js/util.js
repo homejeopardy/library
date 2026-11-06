@@ -82,6 +82,9 @@ function plural(n, one, many) {
   return n + ' ' + (n === 1 ? one : (many || one + 's'));
 }
 
+/* A value safe to sit inside the quotes of an attribute selector. */
+function cssValue(s) { return String(s).replace(/["\\]/g, '\\$&'); }
+
 /* A list of things read out as a person would say it: a, b and c. */
 function sentence(parts) {
   const list = parts.filter(Boolean);

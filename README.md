@@ -659,6 +659,35 @@ never snaps it closed underneath you.
 Sections you have no permission for are not on the page at all, and if none of the
 advanced ones are yours, the fold itself does not appear.
 
+## Opening your library on another device
+
+**Settings → Open your library on another device → Make a code.** Point the other device's
+camera at the QR code and the library opens there, signed in as you. Nothing is typed, and
+that device needs to hold nothing beforehand: a new iPad, a laptop at home, the machine in
+the other room.
+
+Your password is not in the code and is not needed — which matters, because nobody can look
+an existing password up, not even you. What the code opens is a **second locked copy of the
+access key**, made by the device you are already signed in on and locked with a code it
+invents. Exactly the same arrangement as every other entry in the accounts file, and just as
+useless to anyone without the code.
+
+It **works once**. Using it wipes it, and **Stop this code** cancels one you decide against.
+Until it is used, anyone who can see it can sign in as you, so show it to the device rather
+than to the room. The code rides in the part of the address after the `#`, which a browser
+never sends to a server; the page reads it once and wipes it from the address bar and the
+history entry before anything else runs.
+
+Every person who can sign in has this section, because it is about their own account and
+the device in their hand. If somebody is standing in front of you with a new laptop and no
+way into it, their row under **Who can sign in** has the same thing: **Open on another
+device**. That one needs *Manage people and the key* — which could reset their password
+anyway, so it opens no door that was shut.
+
+Two QR codes, doing different jobs: this one signs in a **person**, and **Set up another
+device** under *Sync across devices* carries the access key to set up a **device**, which
+is how the student station is paired.
+
 ## Who can sign in
 
 **Settings → Advanced → Who can sign in** is where accounts are made, and the only
@@ -670,24 +699,8 @@ To add somebody: type their name, and the app generates a **temporary password**
 it. Press **Add**, read them the password — it is shown on their row until the page is
 reloaded, and stored nowhere — and the first time they sign in with it the app stops them
 there and makes them pick their own. Their row says **Waiting to sign in** until they do.
-
-### Signing in on another device, without typing
-
-Beside the temporary password is **QR code**. Point the other device's camera at it and it
-opens the library there, signs that person in, and goes straight to picking their own
-password. Nothing is typed, and the device needs to hold nothing beforehand — a brand-new
-iPad, a laptop at home. The account's own locked copy of the access key is what opens the
-library, so **no key is in the code**: it is worth exactly as much as the temporary
-password inside it, and stops working the moment that password is traded in.
-
-The name and password ride in the part of the address after the `#`, which a browser never
-sends to a server. The page reads it once, wipes it out of the address bar and the history
-entry before anything else runs, and spends it. Show the code to the person it belongs to,
-the way you would read the password out, and not to the room.
-
-This is a different thing from **Set up another device** under *Sync across devices*, which
-also offers a QR code: that one carries the **access key** and sets a device up as itself —
-it is how the student station is paired. The sign-in code is for a person.
+Beside the password is a **QR code** that saves them typing it, the same idea as the one
+above and spent the same way.
 
 **Reset password** issues a fresh temporary password the same way, which is the answer
 when somebody forgets theirs. It keeps the person and their ticks exactly where they
