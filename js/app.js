@@ -44,6 +44,17 @@ function readSignInLink() {
 }
 const signInLink = readSignInLink();
 
+/* The students' page sends a teacher here when the station it is on has never
+   been set up, with this word on the end — so the sign-in that follows knows
+   what it is for and the device ends up a station rather than a staff page. */
+function readStationWish() {
+  if (!/[#&]station(?=[&]|$)/.test(location.hash || '')) return false;
+  const rest = (location.hash || '').replace(/[#&]station(?=[&]|$)/, '');
+  history.replaceState(null, '', location.pathname + location.search + (rest && rest !== '#' ? rest : ''));
+  return true;
+}
+const stationWish = readStationWish();
+
 const ROUTES = ['circulation', 'catalog', 'shelves', 'patrons', 'holds', 'reports', 'settings'];
 let route = (location.hash || '').replace('#', '') || 'circulation';
 if (!ROUTES.includes(route)) route = 'circulation';
@@ -66,6 +77,7 @@ window.addEventListener('hashchange', () => {
      reloads the page, so nothing would happen at all without this. */
   const handed = readSignInLink();
   if (handed) { signInFromLink(handed); return; }
+  if (readStationWish() && !Sync.configured() && !Sync.stationOnly()) { goToStation(); return; }
   const next = (location.hash || '').replace('#', '') || 'circulation';
   if (next !== route) { route = ROUTES.includes(next) ? next : 'circulation'; render(); }
 });
@@ -194,10 +206,11 @@ function render() {
   const who = document.getElementById('who');
   who.hidden = !Auth.me();
   who.textContent = Auth.me() ? (Auth.temporary() ? 'Done — back to students' : 'Sign out (' + Auth.me() + ')') : '';
-  const locked = Sync.stationOnly();
-  const gated = !locked && Auth.needsSignIn();
-  document.getElementById('tabs').hidden = locked || gated;
-  if (locked) { renderStationLock(); return; }
+  /* A device that is only the students' station lands on the same first screen as
+     anyone else: the students' page is one button, and a teacher who wants this
+     page signs in for it. No key to paste unless everything else has failed. */
+  const gated = Sync.stationOnly() || Auth.needsSignIn();
+  document.getElementById('tabs').hidden = gated;
   if (gated) { renderSignIn(); return; }
   document.title = (S().libraryName || 'Classroom Library');
   Array.from(document.querySelectorAll('.tab')).forEach(t => {
@@ -277,10 +290,16 @@ function syncSettingsHTML() {
       <button class="btn" data-act="sync-now">Sync now</button>
       <button class="btn btn-quiet" data-act="sync-disconnect">Disconnect this computer</button>
     </div>
-    <div class="actions"><button class="btn" data-act="pair-show">Set up another device…</button></div>
+    <div class="actions"><button class="btn" data-act="pair-show">Set up another device with the key…</button></div>
     <div id="pair-panel" hidden>
-      <p class="hint">Open one of these links on the other device and it sets itself up — the key never has to be typed again.
-        <strong>Anyone with a link can read and change the library</strong>, so keep them to your own devices and don't post them anywhere.</p>
+      <p class="hint">Usually you don't need these. On the other device, open the library and sign in with your
+        name and password — or make a code under "Open your library on another device" above and point its camera
+        at it. For the students' station, press <strong>Student</strong> on the other device and sign in once when
+        it asks. These links are the way in when none of that is possible: nothing to sign in to, or an account
+        nobody can get at.</p>
+      <p class="hint">Opening one on the other device sets it up with no typing. <strong>Anyone with a link can read
+        and change the library</strong> — the key itself is in it — so keep them to your own devices and don't post
+        them anywhere.</p>
       <div class="pair-row">
         <label class="field"><span>Student station</span><input id="pair-student" readonly value="${esc(Sync.pairingURL('student'))}"></label>
         <button class="btn" data-act="pair-copy" data-id="student">Copy</button>
@@ -440,9 +459,18 @@ const Auth = (function () {
   /* A sign-in that came from the student screen lasts only while the admin
      page is open — closing it, or going back, signs out. */
   const TEMP = 'classroom-library-me-temp';
+  const BORROWED = 'classroom-library-key-admin-temp';
   const temporary = () => get(TEMP) === '1';
+  /* That sign-in may also have lent this page the access key, on a device that
+     is only the students' station and holds none of its own. The loan ends with
+     the session: handed back when the page closes, and when they sign out. */
+  function dropBorrowedKey() {
+    if (get(BORROWED) !== '1') return;
+    set('classroom-library-key-admin', null);
+    set(BORROWED, null);
+  }
   if (temporary()) {
-    window.addEventListener('pagehide', () => { set(ME, null); set(TEMP, null); });
+    window.addEventListener('pagehide', () => { set(ME, null); set(TEMP, null); dropBorrowedKey(); });
   }
 
   /* No list stored means no account is in play: a computer connected with the access
@@ -479,7 +507,7 @@ const Auth = (function () {
       /* Back to the top of the sign-in, or the next person would be handed the
          screen the last one left behind — at worst the one that sets a password. */
       resetGate();
-      if (wasTemporary) { location.href = 'student/'; return; }
+      if (wasTemporary) { dropBorrowedKey(); location.href = 'student/'; return; }
       render();
     },
     needsSignIn: needsSignIn,
@@ -488,19 +516,69 @@ const Auth = (function () {
 })();
 
 let gate;
-function resetGate() { gate = { step: 'name', name: '', account: null, error: '', busy: false }; }
+function resetGate() { gate = { step: 'choose', name: '', account: null, error: '', busy: false, forStation: false }; }
 resetGate();
+
+/* The students' page.
+
+   On a device that holds a key it is simply there — the students' page picks up
+   the key this one holds. On a device that holds nothing it can't be: the library
+   lives in a private repository and there is nothing to read it with. So the
+   first time, a teacher signs in here, and that sign-in is what sets the station
+   up. It replaces carrying the key over in a link. */
+function goToStation() {
+  if (Sync.configured() || Sync.stationOnly()) { location.href = 'student/'; return; }
+  gate.forStation = true;
+  goStep({ step: 'name', name: gate.name });
+}
+
+/* Moving to the next step of the sign-in. Everything the step itself doesn't say
+   is cleared, except whether this sign-in is here to set the station up: that was
+   decided on the first screen and has to survive every step after it, or a teacher
+   who pressed Student ends up signed in on the staff page instead. */
+function goStep(next) {
+  gate = Object.assign({ name: '', account: null, error: '', forStation: gate.forStation }, next);
+  renderSignIn();
+}
+
+/* Where a finished sign-in lands. Normally the library opens. If the sign-in was
+   only to get this device going as the students' station, the key goes to the
+   station instead and nobody is left signed in here — so a child who taps back
+   out of the students' page finds the way shut, as on any other station. */
+function finishSignIn(name, can) {
+  if (!gate.forStation) { Auth.signIn(name, can); return; }
+  Sync.becomeStation();
+  Auth.forget();
+  location.href = 'student/';
+}
 
 function renderSignIn() {
   const g = gate;
+  const station = Sync.stationOnly();
   const body = {
-    name: `<p>Sign in to open the library.</p>
+    /* Two buttons, because two quite different people open this page: whoever runs
+       the library, and whoever is next in the queue with a book. */
+    choose: `<p>${station
+        ? 'This device is the students\' station.'
+        : 'Who is at this screen?'}</p>
+      <div class="gate-choice">
+        <button type="button" class="btn ${station ? '' : 'btn-primary'} btn-big" data-gate="name">
+          <strong>Sign in</strong><span>Check books in and out, add books, see who has what</span></button>
+        <button type="button" class="btn ${station ? 'btn-primary' : ''} btn-big" data-gate="student">
+          <strong>Student</strong><span>Borrow a book, bring one back, see what's on the shelf</span></button>
+      </div>
+      <p class="hint gate-aside"><button type="button" class="link" data-gate="key">Use the access key instead</button>
+        — only for the very first computer, or if sign-in has stopped working.</p>`,
+    name: `<p>${g.forStation
+        ? 'A teacher opens this one first. Sign in here and this device becomes the students\' station — then it stays one, and nobody signs in again.'
+        : 'Sign in to open the library.'}</p>
       <label class="field"><span>Your name</span>
         <input name="who" autocomplete="username" value="${esc(g.name)}" placeholder="e.g. Catherine"></label>
       <div class="actions">
         <button type="submit" class="btn btn-primary">Continue</button>
-        <button type="button" class="btn btn-quiet" data-gate="key">Use the access key instead</button>
-      </div>`,
+        <button type="button" class="btn btn-quiet" data-gate="choose">Back</button>
+      </div>
+      <p class="hint gate-aside"><button type="button" class="link" data-gate="key">Use the access key instead</button></p>`,
     password: `<p>Welcome back, <strong>${esc(g.name)}</strong>.</p>
       <input class="sr-only" type="text" name="username" value="${esc(g.name)}" autocomplete="username" readonly tabindex="-1" aria-hidden="true">
       <label class="field"><span>Password</span>
@@ -541,7 +619,7 @@ function renderSignIn() {
         <input name="key" type="password" autocomplete="current-password" placeholder="github_pat_…"></label>
       <div class="actions">
         <button type="submit" class="btn btn-primary">Connect this computer</button>
-        <button type="button" class="btn btn-quiet" data-gate="name">Back</button>
+        <button type="button" class="btn btn-quiet" data-gate="choose">Back</button>
       </div>`
   }[g.step];
 
@@ -561,8 +639,16 @@ function renderSignIn() {
   const form = document.getElementById('gate-form');
   form.addEventListener('submit', e => { e.preventDefault(); gateSubmit(form); });
   form.addEventListener('click', e => {
-    const to = e.target.dataset && e.target.dataset.gate;
-    if (to) { gate = { step: to, name: gate.name, account: gate.account, error: '' }; renderSignIn(); }
+    /* closest(), not the target itself: the buttons on the first screen have a
+       line of their own text inside them, and that is what gets clicked. */
+    const el = e.target.closest && e.target.closest('[data-gate]');
+    if (!el || !form.contains(el)) return;
+    const to = el.dataset.gate;
+    if (to === 'student') { e.preventDefault(); goToStation(); return; }
+    /* Setting the station up survives the steps in between — going back to the
+       name, or round by the access key — and ends the moment they step off it. */
+    if (to === 'choose') gate.forStation = false;
+    goStep({ step: to, name: gate.name, account: gate.account });
   });
   if (g.step === 'link') return;   // nothing to press yet, and nothing to focus
   const first = form.querySelector('input:not([readonly])');
@@ -577,7 +663,7 @@ async function signInFromLink(data) {
      more — their session should not be sitting underneath a screen that is asking
      a different person to pick a password. */
   if (Auth.me() && Accounts.norm(Auth.me()) !== Accounts.norm(data.u)) Auth.forget();
-  gate = { step: 'link', name: data.u, account: null, error: '' };
+  gate = { step: 'link', name: data.u, account: null, error: '', forStation: false };
   render();
   try {
     const all = (await Accounts.load()).accounts;
@@ -599,22 +685,20 @@ async function signInFromLink(data) {
          before the library opens and a failure here is not swallowed. */
       await Accounts.clearHandoff(account.user);
       toast('Signed in as ' + account.name + ' on this device.', 'ok');
-      Auth.signIn(account.name, account.can);
+      finishSignIn(account.name, account.can);
       return;
     }
     if (account.temp) {
-      gate = { step: 'renew', name: account.name, account: account, error: '' };
-      renderSignIn();
+      goStep({ step: 'renew', name: account.name, account: account });
       return;
     }
-    Auth.signIn(account.name, account.can);
+    finishSignIn(account.name, account.can);
   } catch (e) {
     /* A code that has been used already, or a password reissued since it was made.
        Say so and leave them at the ordinary sign-in — but don't tack advice onto a
        message that already carries its own. */
     const next = e.kind === 'handoff' ? '' : ' Sign in with your password, or ask for a new code.';
-    gate = { step: 'name', name: data.u, account: null, error: e.message + next };
-    renderSignIn();
+    goStep({ step: 'name', name: data.u, error: e.message + next });
   }
 }
 
@@ -630,12 +714,12 @@ async function gateSubmit(form) {
       const all = (await Accounts.load()).accounts;
       Auth.noteAccounts(all);
       const account = all.find(a => Accounts.norm(a.user) === Accounts.norm(typed));
-      if (account) gate = { step: 'password', name: account.name, account: account, error: '' };
+      if (account) gate = { step: 'password', name: account.name, account: account, error: '', forStation: gate.forStation };
       /* Only the very first account makes itself. After that, typing a name nobody
          has used gets you nowhere: an account is added in Settings and comes with a
          temporary password, so walking up to a connected computer and inventing a
          name is not a way in. */
-      else if (Sync.configured() && !all.length) gate = { step: 'create', name: typed, account: null, error: '' };
+      else if (Sync.configured() && !all.length) gate = { step: 'create', name: typed, account: null, error: '', forStation: gate.forStation };
       else if (Sync.configured()) return fail('There is no account for ' + typed + '. Whoever runs the library adds people in Settings, under "Who can sign in", and hands out a temporary password.');
       else return fail('There is no account for ' + typed + ' yet, and this computer is not connected. Use the access key below, or sign in on a computer that is already set up.');
       return renderSignIn();
@@ -650,10 +734,9 @@ async function gateSubmit(form) {
       /* A temporary password gets you this far and no further: the next screen is
          picking your own, and there is no way past it to the library. */
       if (gate.account.temp) {
-        gate = { step: 'renew', name: gate.account.name, account: gate.account, error: '' };
-        return renderSignIn();
+        return goStep({ step: 'renew', name: gate.account.name, account: gate.account });
       }
-      return Auth.signIn(gate.account.name, gate.account.can);
+      return finishSignIn(gate.account.name, gate.account.can);
     }
 
     if (gate.step === 'renew') {
@@ -663,7 +746,7 @@ async function gateSubmit(form) {
       await Accounts.save(gate.account.name, form.password.value, Sync.key(), null);
       Auth.noteAccounts([1]);
       toast('Password set. Welcome.', 'ok');
-      return Auth.signIn(gate.account.name, gate.account.can);
+      return finishSignIn(gate.account.name, gate.account.can);
     }
 
     if (gate.step === 'create') {
@@ -674,20 +757,21 @@ async function gateSubmit(form) {
       const all = (await Accounts.load()).accounts;
       if (all.length) {
         Auth.noteAccounts(all);
-        gate = { step: 'name', name: gate.name, account: null, error: '' };
+        gate = { step: 'name', name: gate.name, account: null, error: '', forStation: gate.forStation };
         return fail('Someone has set this library up already. Ask them to add you in Settings, under "Who can sign in".');
       }
       const can = ABILITIES.map(a => a.key);
       await Accounts.save(gate.name, form.password.value, Sync.key(), can);
       Auth.noteAccounts([1]);
-      return Auth.signIn(gate.name, can);
+      return finishSignIn(gate.name, can);
     }
 
     if (gate.step === 'key') {
       await connectWithKey(form.key.value, btn);
       if (!Sync.configured()) return fail('That key did not work.');
-      gate = { step: 'name', name: gate.name, account: null, error: '' };
-      return renderSignIn();
+      /* The key was pasted to get the station going, so the station is where it goes. */
+      if (gate.forStation) return finishSignIn();
+      return goStep({ step: 'name', name: gate.name, forStation: false });
     }
   } catch (e) {
     fail(e.message);
@@ -899,22 +983,6 @@ async function abilityToggled(input) {
     toast(e.message, 'error');
     drawAccounts();
   }
-}
-
-function renderStationLock() {
-  view.innerHTML = `
-  <section class="pane narrow station-lock">
-    <h2>This computer is the student station</h2>
-    <p>Students use <a href="student/">the student page</a>. To run the admin page here, paste the GitHub access key.</p>
-    ${keyFormHTML('Unlock', true)}
-  </section>`;
-  const form = view.querySelector('.key-form');
-  const input = document.getElementById('sync-key');
-  form.addEventListener('submit', e => {
-    e.preventDefault();
-    connectWithKey(input.value, form.querySelector('button[type="submit"]'));
-  });
-  input.focus();
 }
 
 /* ============================ CIRCULATION ============================ */
@@ -2382,6 +2450,22 @@ function appearanceHTML() {
    The code is spent the moment it is used. Until then it is a way in,
    so the screen says so rather than leaving it lying about.
    --------------------------------------------------------------- */
+/* Turning the device you are on into the students' station.
+
+   Nothing here is a permission to give away: a signed-in page can already open
+   the students' page, and that page helps itself to the key beside it. All this
+   adds is giving up the admin copy — strictly less reach than the device had a
+   moment ago, which is why it needs nothing ticked. */
+function becomeStationHTML() {
+  if (!Auth.me() || !Sync.configured() || Auth.temporary()) return '';
+  return `<h2 class="section-title">Hand this device to the students</h2>
+    <p class="hint">Leaves this device as the students' station: their page opens on it from now on, and
+      this one asks to sign in again. Use it on the classroom iPad after you have signed in on it. It
+      signs you out here — your account and the library are untouched.</p>
+    <div class="actions"><button class="btn" data-act="station-hand-over">Hand it over…</button></div>
+`;
+}
+
 function deviceHandoffHTML() {
   if (!Auth.me() || !Sync.configured()) return '';
   return `<h2 class="section-title">Open your library on another device</h2>
@@ -2549,6 +2633,7 @@ VIEWS.settings = function () {
     ${installSectionHTML()}
     ${appearanceHTML()}
     ${deviceHandoffHTML()}
+    ${becomeStationHTML()}
     ${library}
     ${genres}
     ${advanced}
@@ -3062,6 +3147,14 @@ shared drives and out of the hands of students.</p>
   },
 
   'sign-out': () => Auth.signOut(),
+
+  /* The last thing this page does before it belongs to the students. */
+  'station-hand-over': () => {
+    if (!confirm('Hand this device to the students? Their page opens on it from now on, you are signed out here, and this page will ask to sign in again.')) return;
+    if (!Sync.becomeStation()) { toast('This device has nothing to hand over yet.', 'error'); return; }
+    Auth.forget();
+    location.href = 'student/';
+  },
 
   'sync-disconnect': () => {
     if (!confirm('Stop syncing on this computer? Its copy of the library stays here; other devices keep the shared library.')) return;
@@ -3806,3 +3899,8 @@ if (!Sync.configured() && Sync.handedOver()) connectWithKey(Sync.handedOver());
 
 /* Opened from a sign-in code: do what the person would have done by hand. */
 if (signInLink) signInFromLink(signInLink);
+
+/* Sent here from an unset station. Only honoured when there is nothing on this
+   device to open: with a key already here, the students' page needed no setting
+   up and sending anyone back to it would be a circle. */
+else if (stationWish && !Sync.configured() && !Sync.stationOnly()) goToStation();

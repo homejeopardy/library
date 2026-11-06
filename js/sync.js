@@ -394,6 +394,24 @@ const Sync = (function () {
     // 'merge' needs nothing here: with no base, the first sync keeps both sides.
   }
 
+  /* Hands this device over to the students.
+
+     The key moves into the station's own slot and this page gives up the copy it
+     was holding, so the device ends up exactly where a student pairing link used
+     to leave it: the students' page works, and the admin page here asks again.
+     The difference is only in how the key arrived — carried down by somebody
+     signing in, rather than carried about in a link.
+
+     The library itself is left alone. It has just been downloaded, and the
+     station reads the same copy. */
+  function becomeStation() {
+    const key = accessKey();
+    if (!key) return false;
+    lsSet(KEY_PREFIX + 'student', key);
+    if (ROLE === 'admin') lsSet(KEY_PREFIX + 'admin', null);
+    return true;
+  }
+
   function disconnect() {
     lsSet(KEY_PREFIX + ROLE, null);
     base = {};
@@ -442,7 +460,7 @@ const Sync = (function () {
     status: () => status, describe: describe, pendingChanges: pendingChanges,
     history: history, fileAt: fileAt, files: () => Object.keys(FILES),
     syncNow: syncNow, connect: connect, adopt: adopt, disconnect: disconnect,
-    stationOnly: stationOnly,
+    stationOnly: stationOnly, becomeStation: becomeStation,
     // exposed for tests
     _merge: mergeFile, _serialize: serialize
   };

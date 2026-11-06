@@ -392,7 +392,14 @@ a { color: var(--accent); }
 .sign-in form > p:first-child { margin: 0 0 18px; font-size: 14px; color: var(--text-muted); }
 .sign-in form > p:first-child strong { color: var(--text); }
 .sign-in .actions { margin-top: 18px; }
-.station-lock h2 { margin-top: 24px; }
+/* The two choices on the first screen. Two quite different people arrive at
+   this page — whoever runs the library, and whoever is next in the queue with
+   a book — so each says in a line underneath what is behind it. */
+.gate-choice { display: grid; gap: 10px; margin-top: 18px; }
+/* The access key is the rare way in, and reads like one: a line of text under
+   the buttons rather than a third button beside them. */
+.sign-in .gate-aside { margin-top: 16px; }
+.sign-in .gate-aside .link { font-size: inherit; }
 /* Present for a password manager to read, invisible to everyone else. */
 .sr-only {
   position: absolute;
@@ -616,6 +623,18 @@ code { font-family: var(--mono); font-size: .92em; background: var(--surface-2);
 .btn-quiet:hover:not(:disabled) { background: var(--surface-2); color: var(--text); transform: none; box-shadow: none; }
 .btn-danger { color: var(--danger); background: var(--surface); }
 .btn-danger:hover:not(:disabled) { background: var(--danger-soft); }
+/* A whole-width button with a line of explanation under its name, for a choice
+   that has to be readable across a room and pressed while holding a book. */
+.btn-big {
+  display: block;
+  width: 100%;
+  white-space: normal;
+  text-align: left;
+  padding: 13px 18px;
+  border-radius: 14px;
+}
+.btn-big strong { display: block; font-size: 16px; font-weight: 600; }
+.btn-big span { display: block; margin-top: 2px; font-size: 13px; font-weight: 400; opacity: .75; }
 
 .link {
   appearance: none;

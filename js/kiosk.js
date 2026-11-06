@@ -40,9 +40,12 @@ function screenSetup(message) {
   main.innerHTML = `
   <section class="k-card k-setup">
     <h1>Set up the student station</h1>
-    <p>Teacher: on the computer that runs the library, go to <strong>Settings → Sync across devices →
-      Set up another device</strong> and open the student station link here. Nothing needs typing.</p>
-    <p class="hint">Or paste the access key by hand. Students never see it.</p>
+    <p>Teacher: press the button and sign in with your name and password. That is the whole of it —
+      this device becomes the station and stays one, and nobody signs in on it again.</p>
+    <div class="actions"><button type="button" class="btn btn-primary" id="k-station-sign-in">Sign in to set this up</button></div>
+    <p class="hint">No account yet, or sign-in not working? Paste the access key instead — or open the
+      student link from <strong>Settings → Sync across devices</strong> on the computer that runs the
+      library. Students never see either.</p>
     <form class="key-form" autocomplete="on" id="k-form">
       <input class="sr-only" type="text" name="username" value="Classroom Library key"
              autocomplete="username" readonly tabindex="-1" aria-hidden="true">
@@ -74,9 +77,12 @@ function screenSetup(message) {
     }
   };
   document.getElementById('k-form').addEventListener('submit', e => { e.preventDefault(); go(); });
+  /* Over to the library's own sign-in, with a word on the end saying what the
+     sign-in is for, so the teacher doesn't arrive there and have to guess. */
+  document.getElementById('k-station-sign-in')
+    .addEventListener('click', () => { location.href = '../#station'; });
   // Arrived from a pairing link: connect without anyone touching the keyboard.
   if (Sync.handedOver()) go(Sync.handedOver(), btn);
-  else input.focus();
 }
 
 function screenLoading() {
@@ -781,10 +787,19 @@ function openStaffGate(state) {
         if (!account) return fail('There is no account for ' + typed + '.');
         return openStaffGate({ step: 'password', name: account.name, account: account });
       }
-      await Accounts.unlock(g.account, form.password.value);   // throws if the password is wrong
+      const token = await Accounts.unlock(g.account, form.password.value);   // throws if the password is wrong
       try {
         localStorage.setItem('classroom-library-me', g.account.name);
         localStorage.setItem('classroom-library-me-temp', '1');
+        /* On a device that is only the station, the admin page holds no key of its
+           own and would meet this person with a second sign-in. Lend it the one just
+           unlocked — the same key this page is already holding, in the same browser,
+           so nothing is exposed that wasn't — and mark it borrowed, so it goes when
+           the session does. */
+        if (!localStorage.getItem('classroom-library-key-admin')) {
+          localStorage.setItem('classroom-library-key-admin', token);
+          localStorage.setItem('classroom-library-key-admin-temp', '1');
+        }
         /* Carry the person's permissions over, or the staff page would open with the
            run of the place for anyone who can reach the station. */
         if (Array.isArray(g.account.can)) {

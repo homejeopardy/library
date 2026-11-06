@@ -98,6 +98,9 @@ body.kiosk { font-size: 17px; }
 
 .k-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: var(--shadow); }
 .k-card h1 { margin-top: 0; font-size: 24px; }
+/* On the setup card the key is the way in of last resort, so it sits apart
+   from the sentence that offers it rather than crowding underneath. */
+.k-setup .key-form { margin-top: 14px; }
 .k-center { text-align: center; }
 
 @media (max-width: 640px) {

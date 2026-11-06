@@ -98,12 +98,13 @@ it is to get back.
 - **Clearing only the cache changes nothing.** Cached files and site data are separate
   boxes in every browser's dialog; the library lives in the second one.
 - **With sync on, the books are never at risk** — they are in GitHub too, with history.
-  A cleared browser loses its copy and forgets the key, and both come back the moment you
-  open a setup link.
-- **Keep a way back in.** Any one of these is enough, and all three are free:
+  A cleared browser loses its copy and forgets the key, and both come back the moment
+  somebody signs in on it again.
+- **Keep a way back in.** Signing in with your name and password is the way back, and it
+  needs nothing kept anywhere. For the day that won't work, any one of these is enough:
   - let your browser **save the key** when it offers — saved passwords are kept separately
     from site data and survive the clear;
-  - **bookmark** a setup link from **Set up another device**;
+  - **bookmark** a setup link from **Set up another device with the key**;
   - press **File** there to save a small `open-classroom-library.html`. Keep it in
     Documents; double-clicking it opens the app already set up. It holds the key, so keep
     it off shared drives.
@@ -145,18 +146,27 @@ app's own repository is public.
 5. **Every other computer:** go to the site, sign in with your name and password. That's
    the whole setup. If the browser's data is ever cleared, sign in again and everything
    comes back.
-6. **The student station** is different: it runs without anyone signed in, so it keeps its
-   own one-time setup. On your computer, **Settings → Sync across devices → Set up another
-   device** gives a station link with a **Copy** button, a **QR** code and a **File**
-   button. Open the link on the classroom device and bookmark it there.
+6. **The student station:** on the classroom device, go to the site and press
+   **Student**. It says a teacher has to open it first; sign in with your name and
+   password, and the device turns into the station there and then. Bookmark it. Nothing
+   is typed but your own password, and no key goes anywhere near the iPad's address bar.
 
-The link carries the key in the part of a web address browsers never send to a server, and
-the receiving page wipes it out of the address bar before it does anything else. Still,
-**anyone holding a link can read and change the library**, so treat them like the key
-itself: your own devices, never posted anywhere.
+Setting a station up signs you out of it again as it finishes. The device keeps the key
+for the students' page and gives up the teacher's copy, so a child who taps back out of
+the students' screen is asked to sign in like anywhere else. A device you have *already*
+signed in on becomes a station the same way from **Settings → Hand this device to the
+students**.
 
 The student page and the admin page on the *same browser* share one key automatically, so
 that computer only ever needs setting up once.
+
+**The old way, still there if you need it.** **Settings → Advanced → Sync across devices →
+Set up another device with the key** gives a link with a **Copy** button, a **QR** code and
+a **File** button, for a device nobody can sign in on, or a day when the accounts
+themselves can't be reached. The link carries the key in the part of a web address browsers
+never send to a server, and the receiving page wipes it out of the address bar before it
+does anything else. Still, **anyone holding a link can read and change the library**, so
+treat them like the key itself: your own devices, never posted anywhere.
 
 If a device that already had its own library connects to a shared library that also has
 one, it asks whether to keep both (merge) or use only the shared one — and in the second
@@ -179,8 +189,10 @@ case downloads the device's old library as a backup file first.
 ### When the key expires
 
 Devices show **"GitHub rejected the access key"**. Make a new key (step 2) and paste it in
-**Settings → Replace access key** on your main computer — then re-open the setup links on
-the others, exactly as in step 4, so you still only type it once. Nothing is lost; changes
+**Settings → Replace access key** on your main computer. Other computers pick the new key
+up the next time someone signs in. A station doesn't sign anyone in, so it needs the new
+key by hand: press **Student**, sign in on it once, and it sets itself up again — or
+re-open the setup link, as in step 6. Nothing is lost; changes
 made in the meantime upload as soon as the key works.
 
 ### What the key can and can't protect
@@ -634,10 +646,35 @@ A marked book stays in the catalog with all its history. It will not be checked 
 desk can still override), will not fill a hold, and the student station tells anyone who
 scans it to give it to you. **Back on the shelf** undoes all of that.
 
+## The first screen
+
+Opening the library on a device that nobody is signed in on asks one question — *who is at
+this screen?* — and gives two buttons:
+
+- **Sign in** — your name and password, and the library opens: circulation, the catalogue,
+  the shelves.
+- **Student** — the students' screen, for borrowing a book, bringing one back, or seeing
+  what's on the shelf.
+
+Underneath, in small type, is **Use the access key instead**. That is for the very first
+computer and for the day sign-in won't work, and it is the only place the key is ever
+asked for.
+
+Pressing **Student** on a device that has never been set up says so, and asks a teacher to
+sign in — once. That sign-in is what fetches the library, and when it finishes the device
+is the students' station and signs the teacher back out. There is no link to carry over and
+no key to type.
+
+On a device that is already the station, the same screen says so and **Student** is the
+button that stands out — but a teacher can still **Sign in** on it with their own password
+and use the admin pages.
+
 ## The staff way in, on a shared device
 
 The student station carries a small **Staff** link in the corner. It asks for your name and
-password — the same account you sign in with anywhere — and then opens the admin pages.
+password — the same account you sign in with anywhere — and then opens the admin pages,
+even on a device that holds no key of its own: the sign-in lends the admin page the key it
+just unlocked, and takes it back when the session ends.
 
 That sign-in is **temporary on purpose**: leaving the admin page signs you straight out
 again, so the classroom device is never left open behind you. The top bar says **Done —
@@ -648,8 +685,10 @@ until you sign out.
 
 ## The two halves of Settings
 
-The top of **Settings** is the everyday kind: how the screen looks, what the library is
-called, how long a loan runs, and the genre list. Everything that is reached a few times
+The top of **Settings** is the everyday kind: how the screen looks, opening your library
+on another device, handing this device to the students, what the library is called, how
+long a loan runs, and the genre list — all of it about the device in front of you or the
+day's work, and all of it there for anyone who can sign in. Everything that is reached a few times
 a year and does something large when it is — the GitHub connection, who may sign in,
 going back to an earlier day, backup and erasing the library — is folded into
 **Advanced** at the bottom. It is shut when the page opens, and shut again the next time:
@@ -685,8 +724,17 @@ device**. That one needs *Manage people and the key* — which could reset their
 anyway, so it opens no door that was shut.
 
 Two QR codes, doing different jobs: this one signs in a **person**, and **Set up another
-device** under *Sync across devices* carries the access key to set up a **device**, which
-is how the student station is paired.
+device with the key** under *Sync across devices* carries the access key to set up a
+**device** — the fallback, now that pressing **Student** and signing in once does the same
+job for a station without putting the key in a link.
+
+### Handing this device to the students
+
+Underneath is **Hand this device to the students**, on a device you are signed in on. It
+leaves the key with the students' page, gives up the teacher's copy and signs you out:
+exactly where pressing **Student** on a bare device ends up, for a device that was signed
+in first — the classroom iPad you opened by scanning a code, say. Your account and the
+library are untouched, and you can sign in on it again whenever you like.
 
 ## Who can sign in
 
